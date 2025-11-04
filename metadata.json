@@ -1,0 +1,5 @@
+{
+  "name": "Auto Photo Editor",
+  "description": "An AI-powered web application to enhance, restore, colorize, and edit photographs using Google's Gemini API. Features include sharpness adjustment, damage repair, B&W colorization with a before/after preview, cropping, aspect ratio changes, and AI-powered image expansion.",
+  "requestFramePermissions": []
+}
