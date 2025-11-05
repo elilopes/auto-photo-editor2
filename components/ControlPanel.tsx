@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import type { Tool, ImageFile } from '../types';
-import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, Film, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info, Shirt, Camera, GalleryThumbnails, Scissors, Pilcrow } from 'lucide-react';
+import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, FileVideo, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info, Shirt, Camera, GalleryThumbnails, Scissors, Pilcrow } from 'lucide-react';
 
 interface ControlPanelProps {
   imageFile: ImageFile | null;
@@ -19,14 +20,15 @@ interface ControlPanelProps {
   onDollify: () => void;
   onGenerateImages: (prompt: string) => void;
   onWebSearch: () => void;
-  onAnimate: (prompt: string) => void;
+  onGifToMp4: () => void;
   isApiKeySelected: boolean;
   setIsApiKeySelected: (isSelected: boolean) => void;
   onGenerateArtStyles: () => void;
   onArtMovements: () => void;
   onHoldMyDoll: () => void;
   onPhotoShoot: () => void;
-  onVirtualTrial: () => void;
+  onHairstyleTrial: () => void;
+  onVirtualTryOn: (clothingDescription: string) => void;
   onCrop: () => void;
   onCropConfirm: () => void;
   onResize: (width: number, height: number) => void;
@@ -175,7 +177,7 @@ const ViewControls: React.FC<{
     onResetZoom: () => void;
 }> = ({ activeTool, isImageLoaded, onCrop, onCropConfirm, zoom, onZoomIn, onZoomOut, onResetZoom }) => {
     const [isOpen, setIsOpen] = useState(true);
-    const nonZoomableTools: (Tool | null)[] = ['video', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search', 'black-and-white', 'art-effects', 'photo-shoot', 'art-movements', 'virtual-trial'];
+    const nonZoomableTools: (Tool | null)[] = ['gif-to-mp4', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search', 'black-and-white', 'art-effects', 'photo-shoot', 'art-movements', 'hairstyle-trial', 'virtual-try-on'];
     const isZoomable = isImageLoaded && !nonZoomableTools.includes(activeTool);
 
     return (
@@ -308,11 +310,10 @@ const AIFunctionsCollapse: React.FC<{
     onDollify: () => void;
     onHoldMyDoll: () => void;
     onPhotoShoot: () => void;
-    onVirtualTrial: () => void;
+    onHairstyleTrial: () => void;
     onWebSearch: () => void;
-    onAnimate: (prompt: string) => void;
-    animationPrompt: string;
-    setAnimationPrompt: (value: string) => void;
+    onGifToMp4: () => void;
+    imageFile: ImageFile | null;
     onGenerateImages: (prompt: string) => void;
     generationPrompt: string;
     setGenerationPrompt: (value: string) => void;
@@ -341,7 +342,7 @@ const AIFunctionsCollapse: React.FC<{
                       <ControlButton icon={<SmilePlus size={20} />} text="Dollify" onClick={props.onDollify} />
                       <ControlButton icon={<SmilePlus size={20} />} text="Hold My Doll" onClick={props.onHoldMyDoll} description="Creates a doll of you and puts it in your hands." />
                       <ControlButton icon={<Camera size={20} />} text="AI Photo Shoot" onClick={props.onPhotoShoot} description="Generate 4 new poses in 4 new scenes." />
-                      <ControlButton icon={<Scissors size={20} />} text="Virtual Hairstyle Trial" onClick={props.onVirtualTrial} description="Try on 4 different hairstyles." />
+                      <ControlButton icon={<Scissors size={20} />} text="Hairstyle Trial" onClick={props.onHairstyleTrial} description="Try on 4 different hairstyles." />
                       <ControlButton icon={<Globe size={20} />} text="Web Image Search" onClick={props.onWebSearch} />
                       
                       <div className="bg-gray-900 p-4 rounded-lg space-y-3">
@@ -361,17 +362,13 @@ const AIFunctionsCollapse: React.FC<{
                           </button>
                       </div>
 
-                      <div className="bg-gray-900 p-4 rounded-lg space-y-3">
-                          <h3 className="font-semibold text-white flex items-center"><Film size={18} className="mr-2" />Animate Image</h3>
-                          <textarea
-                              value={props.animationPrompt}
-                              onChange={(e) => props.setAnimationPrompt(e.target.value)}
-                              placeholder="e.g., make the clouds move, add ripples to the water..."
-                              className="w-full h-24 p-2 bg-gray-700 text-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                          />
-                          {!props.isApiKeySelected ? (
-                               <div className="text-center p-2 bg-yellow-900/50 rounded-lg">
-                                  <p className="text-sm text-yellow-300 mb-2">Video generation requires an API key.</p>
+                      {props.imageFile?.type === 'image/gif' && (
+                        <div className="bg-gray-900 p-4 rounded-lg space-y-3">
+                            <h3 className="font-semibold text-white flex items-center"><FileVideo size={18} className="mr-2" />Convert GIF to MP4</h3>
+                            <p className="text-sm text-gray-400">Convert your animated GIF into a high-quality video file.</p>
+                            {!props.isApiKeySelected ? (
+                                <div className="text-center p-2 bg-yellow-900/50 rounded-lg">
+                                  <p className="text-sm text-yellow-300 mb-2">Video conversion requires an API key.</p>
                                   <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mb-2 block">Learn about billing</a>
                                   <button 
                                       onClick={async () => {
@@ -387,14 +384,15 @@ const AIFunctionsCollapse: React.FC<{
                               </div>
                           ) : (
                               <button
-                                  onClick={() => props.onAnimate(props.animationPrompt)}
-                                  disabled={!props.animationPrompt.trim() || !props.isImageLoaded}
+                                  onClick={props.onGifToMp4}
+                                  disabled={!props.isImageLoaded}
                                   className="w-full py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                  <Film size={20} className="mr-2" /> Generate Video
+                                  <FileVideo size={20} className="mr-2" /> Convert to MP4
                               </button>
                           )}
-                      </div>
+                        </div>
+                      )}
   
                        <div className="bg-gray-900 p-4 rounded-lg space-y-3">
                           <h3 className="font-semibold text-white flex items-center"><Sparkles size={18} className="mr-2" />Generate from Text</h3>
@@ -468,9 +466,43 @@ const ArtisticEffectsCollapse: React.FC<{
     );
 };
 
+const VirtualTryOnCollapse: React.FC<{
+    onVirtualTryOn: (clothingDescription: string) => void;
+}> = ({ onVirtualTryOn }) => {
+    const [isOpen, setIsOpen] = useState(true);
+    const clothingOptions = [
+        { name: "Black Tuxedo", prompt: "A classic black tuxedo with a white shirt and bow tie." },
+        { name: "Red Gown", prompt: "A vibrant red, floor-length evening gown." },
+        { name: "Leather Jacket", prompt: "A casual outfit with blue jeans, a white t-shirt, and a brown leather jacket." },
+        { name: "Summer Dress", prompt: "A light and airy summer dress with a floral pattern." },
+        { name: "Business Suit", prompt: "A sharp, modern dark grey business suit with a light blue shirt." },
+        { name: "Athleisure Wear", prompt: "Comfortable and stylish athleisure wear, including joggers and a hoodie." },
+    ];
+
+    return (
+        <div className="bg-gray-800 rounded-lg">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3 rounded-lg text-left font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">
+                <span className="flex items-center"><Shirt size={18} className="mr-2"/> Virtual Try-On</span>
+                <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="p-4">
+                    <p className="text-sm text-gray-400 mb-3 text-center">Select an outfit to try on. The AI will place your face on a model wearing the selected clothes.</p>
+                    <div className="grid grid-cols-2 gap-2">
+                        {clothingOptions.map(option => (
+                            <button key={option.name} onClick={() => onVirtualTryOn(option.prompt)} className="p-3 bg-gray-700 rounded-lg text-white font-medium hover:bg-blue-600 transition-colors text-center">
+                                {option.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
     const [showDownloadOptions, setShowDownloadOptions] = useState(false);
-    const [animationPrompt, setAnimationPrompt] = useState('');
     const [generationPrompt, setGenerationPrompt] = useState('');
 
     return (
@@ -482,7 +514,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     type="file"
                     id="new-file-upload"
                     className="hidden"
-                    accept="image/jpeg, image/png, image/webp"
+                    accept="image/jpeg, image/png, image/webp, image/gif"
                     onChange={props.onUploadNew}
                 />
                 <label
@@ -522,11 +554,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     onDollify={props.onDollify}
                     onHoldMyDoll={props.onHoldMyDoll}
                     onPhotoShoot={props.onPhotoShoot}
-                    onVirtualTrial={props.onVirtualTrial}
+                    onHairstyleTrial={props.onHairstyleTrial}
                     onWebSearch={props.onWebSearch}
-                    onAnimate={props.onAnimate}
-                    animationPrompt={animationPrompt}
-                    setAnimationPrompt={setAnimationPrompt}
+                    onGifToMp4={props.onGifToMp4}
+                    imageFile={props.imageFile}
                     onGenerateImages={props.onGenerateImages}
                     generationPrompt={generationPrompt}
                     setGenerationPrompt={setGenerationPrompt}
@@ -534,6 +565,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     setIsApiKeySelected={props.setIsApiKeySelected}
                     isImageLoaded={props.isImageLoaded}
                 />
+
+                <VirtualTryOnCollapse onVirtualTryOn={props.onVirtualTryOn} />
 
                 <ArtisticEffectsCollapse
                     onGenerateArtStyles={props.onGenerateArtStyles}
@@ -638,7 +671,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 <div className="relative">
                     <button 
                       onClick={() => setShowDownloadOptions(!showDownloadOptions)} 
-                      disabled={!props.isImageLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify' || props.activeTool === 'black-and-white' || props.activeTool === 'art-effects' || props.activeTool === 'photo-shoot' || props.activeTool === 'art-movements' || props.activeTool === 'virtual-trial'}
+                      disabled={!props.isImageLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify' || props.activeTool === 'black-and-white' || props.activeTool === 'art-effects' || props.activeTool === 'photo-shoot' || props.activeTool === 'art-movements' || props.activeTool === 'hairstyle-trial' || props.activeTool === 'virtual-try-on'}
                       className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <Download size={20} />
                         <span>Save Image</span>

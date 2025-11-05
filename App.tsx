@@ -6,14 +6,14 @@ import { ImageUploader } from './components/ImageUploader';
 import { EditorLayout } from './components/EditorLayout';
 import { ControlPanel } from './components/ControlPanel';
 import { ImageViewer } from './components/ImageViewer';
-import { processImageWithGemini, generateVideoFromImage, processInpaintingWithGemini, generateImagesFromText, searchWebForSimilarImages } from './services/geminiService';
+import { processImageWithGemini, convertGifToMp4, processInpaintingWithGemini, generateImagesFromText, searchWebForSimilarImages, performVirtualTryOn } from './services/geminiService';
 import { applyAdjustments, cropImage, downloadImage, fileToBase64, resizeImage } from './utils/imageUtils';
 import type { Tool, ImageFile } from './types';
 
 const App: React.FC = () => {
   const [imageFile, setImageFile] = useState<ImageFile | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [generatedMp4Url, setGeneratedMp4Url] = useState<string | null>(null);
   const [cartoonImages, setCartoonImages] = useState<string[] | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
   const [threeDImages, setThreeDImages] = useState<string[] | null>(null);
@@ -22,7 +22,8 @@ const App: React.FC = () => {
   const [artImages, setArtImages] = useState<string[] | null>(null);
   const [photoShootImages, setPhotoShootImages] = useState<string[] | null>(null);
   const [artMovementImages, setArtMovementImages] = useState<string[] | null>(null);
-  const [virtualTrialImages, setVirtualTrialImages] = useState<string[] | null>(null);
+  const [hairstyleImages, setHairstyleImages] = useState<string[] | null>(null);
+  const [virtualTryOnImage, setVirtualTryOnImage] = useState<string | null>(null);
   const [webSearchResults, setWebSearchResults] = useState<{ summary: string; links: { uri: string; title: string }[] } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -44,11 +45,12 @@ const App: React.FC = () => {
 
   const graffitiFeatures = useMemo(() => {
     const features = [
-        'Restore', 'Colorize', 'Resize', 'Crop', 'Animate', 'Remove Background', 
+        'Restore', 'Colorize', 'Resize', 'Crop', 'GIF to MP4', 'Remove Background', 
         'Cartoonify', '3D Drawing', 'Expand', 'Portrait Retouch', 'Web Search', 
-        'Adjustments', 'Art Effects', 'Generate', 'Remove Object', 'Blur Background', 'Change Color'
+        'Adjustments', 'Art Effects', 'Generate', 'Remove Object', 'Blur Background', 
+        'Change Color', 'Virtual Try-On', 'Hairstyle Trial'
     ];
-    const colors = ['#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#577590'];
+    const colors = ['#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6a4c93'];
 
     return features.map((feature, index) => {
         const style: React.CSSProperties = {
@@ -117,9 +119,8 @@ const App: React.FC = () => {
     return adjusted;
   }, [processedImage, history, brightness, contrast, angle, gamma, sharpness]);
   
-  const updateProcessedImage = (newImage: string, keepAdjustments = false) => {
-    setProcessedImage(newImage);
-    setGeneratedVideoUrl(null);
+  const resetAllViews = () => {
+    setGeneratedMp4Url(null);
     setCartoonImages(null);
     setGeneratedImages(null);
     setThreeDImages(null);
@@ -128,8 +129,14 @@ const App: React.FC = () => {
     setArtImages(null);
     setPhotoShootImages(null);
     setArtMovementImages(null);
-    setVirtualTrialImages(null);
+    setHairstyleImages(null);
+    setVirtualTryOnImage(null);
     setWebSearchResults(null);
+  };
+  
+  const updateProcessedImage = (newImage: string, keepAdjustments = false) => {
+    setProcessedImage(newImage);
+    resetAllViews();
     setHistory(prev => [...prev, newImage]);
     if (!keepAdjustments) {
       resetAdjustments();
@@ -140,17 +147,7 @@ const App: React.FC = () => {
     setImageFile(file);
     setActiveTool(null);
     setCrop(undefined);
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setBwImages(null);
-    setArtImages(null);
-    setPhotoShootImages(null);
-    setArtMovementImages(null);
-    setVirtualTrialImages(null);
-    setWebSearchResults(null);
+    resetAllViews();
     setZoom(1);
   };
 
@@ -162,7 +159,7 @@ const App: React.FC = () => {
         const base64 = await fileToBase64(file);
         handleImageUpload({ name: file.name, type: file.type, base64, size: file.size });
       } else {
-        alert('Please upload a valid image file (JPEG, PNG, WEBP).');
+        alert('Please upload a valid image file (JPEG, PNG, WEBP, GIF).');
       }
     }
     if (event.target) {
@@ -171,17 +168,7 @@ const App: React.FC = () => {
   };
 
   const handleUndo = () => {
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setBwImages(null);
-    setArtImages(null);
-    setPhotoShootImages(null);
-    setArtMovementImages(null);
-    setVirtualTrialImages(null);
-    setWebSearchResults(null);
+    resetAllViews();
     resetAdjustments();
     if (history.length > 1) {
       const newHistory = [...history];
@@ -196,17 +183,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setLoadingMessage(message);
     setActiveTool(tool);
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setBwImages(null);
-    setArtImages(null);
-    setPhotoShootImages(null);
-    setArtMovementImages(null);
-    setVirtualTrialImages(null);
-    setWebSearchResults(null);
+    resetAllViews();
     try {
       const imageToSend = await getAdjustedImage();
       const result = await processImageWithGemini(prompt, imageToSend, imageFile.type);
@@ -232,18 +209,7 @@ const App: React.FC = () => {
     setIsLoading(true);
     setLoadingMessage(message);
     setActiveTool(tool);
-    // Reset all other views
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setBwImages(null);
-    setArtImages(null);
-    setPhotoShootImages(null);
-    setArtMovementImages(null);
-    setVirtualTrialImages(null);
-    setWebSearchResults(null);
+    resetAllViews();
     setProcessedImage(null); // Hide the main viewer image
 
     try {
@@ -272,35 +238,31 @@ const App: React.FC = () => {
     }
   }, [imageFile, getAdjustedImage, history]);
   
-  const handleAnimateImage = async (prompt: string) => {
-    if (!processedImage || !imageFile) return;
+  const handleGifToMp4 = async () => {
+    if (!processedImage || !imageFile || !imageDimensions) return;
+     if (imageFile.type !== 'image/gif') {
+        alert("Please upload a GIF file to convert.");
+        return;
+    }
     setIsLoading(true);
-    setLoadingMessage('Animating image... This may take a few minutes.');
-    setActiveTool('video');
+    setLoadingMessage('Converting GIF to MP4... This may take a few minutes.');
+    setActiveTool('gif-to-mp4');
     setWebSearchResults(null);
     try {
         const imageToSend = await getAdjustedImage();
-        const videoUrl = await generateVideoFromImage(prompt, imageToSend, imageFile.type);
+        const videoUrl = await convertGifToMp4(imageToSend, imageFile.type, imageDimensions);
         if (videoUrl) {
-            setGeneratedVideoUrl(videoUrl);
+            setGeneratedMp4Url(videoUrl);
             setProcessedImage(null);
-            setCartoonImages(null);
-            setGeneratedImages(null);
-            setThreeDImages(null);
-            setDollImages(null);
-            setBwImages(null);
-            setArtImages(null);
-            setPhotoShootImages(null);
-            setArtMovementImages(null);
-            setVirtualTrialImages(null);
+            resetAllViews();
         }
     } catch (error: any) {
-        console.error("Error generating video:", error);
+        console.error("Error converting GIF:", error);
         if (error.message?.includes("Requested entity was not found.")) {
             alert("Your API key is invalid. Please select a valid key and try again.");
             setIsApiKeySelected(false);
         } else {
-            alert("An error occurred while generating the video. Please try again.");
+            alert("An error occurred while converting the GIF. Please try again.");
         }
     } finally {
         setIsLoading(false);
@@ -361,14 +323,43 @@ const App: React.FC = () => {
     handleMultipleIndividualImageRequests(prompts, "Generating your AI photo shoot...", 'photo-shoot', setPhotoShootImages);
   };
 
-  const handleVirtualTrial = () => {
+  const handleHairstyleTrial = () => {
     const prompts = [
       "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with a chic, chin-length bob hairstyle. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
       "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with long, wavy beach curls. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
       "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with a stylish pixie cut. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
       "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with an elegant braided updo. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image."
     ];
-    handleMultipleIndividualImageRequests(prompts, "Generating hairstyle trials...", 'virtual-trial', setVirtualTrialImages);
+    handleMultipleIndividualImageRequests(prompts, "Generating hairstyle trials...", 'hairstyle-trial', setHairstyleImages);
+  };
+  
+  const handleVirtualTryOn = async (clothingDescription: string) => {
+    if (!imageFile) return;
+    setIsLoading(true);
+    setLoadingMessage(`Dressing you up...`);
+    setActiveTool('virtual-try-on');
+    resetAllViews();
+    setProcessedImage(null);
+
+    try {
+        const imageToSend = await getAdjustedImage();
+        const result = await performVirtualTryOn(imageToSend, imageFile.type, clothingDescription);
+        if (result) {
+            setVirtualTryOnImage(result);
+        } else {
+            alert("The AI could not generate the try-on image. Please try again.");
+            setActiveTool(null);
+            setProcessedImage(history[history.length - 1]);
+        }
+    } catch (error) {
+        console.error("Error with virtual try-on:", error);
+        alert("An error occurred during the virtual try-on. Please try again.");
+        setActiveTool(null);
+        setProcessedImage(history[history.length - 1]);
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
   };
 
   const handleCartoonify = () => {
@@ -435,11 +426,7 @@ const App: React.FC = () => {
     setLoadingMessage("Generating images...");
     setActiveTool('generate');
     setProcessedImage(null);
-    setBwImages(null);
-    setArtImages(null);
-    setPhotoShootImages(null);
-    setArtMovementImages(null);
-    setVirtualTrialImages(null);
+    resetAllViews();
     try {
         const images = await generateImagesFromText(prompt);
         setGeneratedImages(images);
@@ -563,7 +550,8 @@ const App: React.FC = () => {
   const handleDownloadArtImage = createDownloadHandler('art');
   const handleDownloadPhotoShootImage = createDownloadHandler('photoshoot');
   const handleDownloadArtMovementImage = createDownloadHandler('art-movement');
-  const handleDownloadVirtualTrialImage = createDownloadHandler('hairstyle');
+  const handleDownloadHairstyleImage = createDownloadHandler('hairstyle');
+  const handleDownloadVirtualTryOnImage = createDownloadHandler('virtual-try-on');
 
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.1, 3));
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.2));
@@ -596,14 +584,15 @@ const App: React.FC = () => {
             onDollify={handleDollify}
             onGenerateImages={handleGenerateImages}
             onWebSearch={handleWebSearch}
-            onAnimate={handleAnimateImage}
+            onGifToMp4={handleGifToMp4}
             isApiKeySelected={isApiKeySelected}
             setIsApiKeySelected={setIsApiKeySelected}
             onGenerateArtStyles={handleGenerateArtStyles}
             onArtMovements={handleArtMovements}
             onHoldMyDoll={handleHoldMyDoll}
             onPhotoShoot={handlePhotoShoot}
-            onVirtualTrial={handleVirtualTrial}
+            onHairstyleTrial={handleHairstyleTrial}
+            onVirtualTryOn={handleVirtualTryOn}
             onCrop={() => setActiveTool('crop')}
             onCropConfirm={handleCropConfirm}
             onResize={handleResize}
@@ -642,7 +631,7 @@ const App: React.FC = () => {
           />
           <ImageViewer
             processedImage={processedImage}
-            generatedVideoUrl={generatedVideoUrl}
+            generatedMp4Url={generatedMp4Url}
             cartoonImages={cartoonImages}
             generatedImages={generatedImages}
             threeDImages={threeDImages}
@@ -651,7 +640,8 @@ const App: React.FC = () => {
             artImages={artImages}
             photoShootImages={photoShootImages}
             artMovementImages={artMovementImages}
-            virtualTrialImages={virtualTrialImages}
+            hairstyleImages={hairstyleImages}
+            virtualTryOnImage={virtualTryOnImage}
             webSearchResults={webSearchResults}
             onDownloadCartoon={handleDownloadCartoon}
             onDownloadGeneratedImage={handleDownloadGeneratedImage}
@@ -661,7 +651,8 @@ const App: React.FC = () => {
             onDownloadArtImage={handleDownloadArtImage}
             onDownloadPhotoShootImage={handleDownloadPhotoShootImage}
             onDownloadArtMovementImage={handleDownloadArtMovementImage}
-            onDownloadVirtualTrialImage={handleDownloadVirtualTrialImage}
+            onDownloadHairstyleImage={handleDownloadHairstyleImage}
+            onDownloadVirtualTryOnImage={handleDownloadVirtualTryOnImage}
             activeTool={activeTool}
             imgRef={imgRef}
             maskCanvasRef={maskCanvasRef}

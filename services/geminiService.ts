@@ -45,6 +45,11 @@ export const processImageWithGemini = async (prompt: string, imageBase64: string
   }
 };
 
+export const performVirtualTryOn = async (imageBase64: string, imageType: string, clothingDescription: string): Promise<string | null> => {
+    const prompt = `Analyze the person in this image. Your task is to perform a virtual try-on. First, accurately identify and isolate the person's head. Then, generate a new, full-body, photorealistic image of that same person wearing the following outfit: '${clothingDescription}'. The new body should be realistically posed and proportioned for the clothing. The head must be seamlessly blended onto the new body, maintaining the original person's identity, expression, and lighting. The background should be a simple, neutral studio setting. Return only the final image.`;
+    return processImageWithGemini(prompt, imageBase64, imageType);
+};
+
 export const processInpaintingWithGemini = async (prompt: string, imageBase64: string, imageType: string, maskBase64: string): Promise<string | null> => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -80,13 +85,13 @@ export const processInpaintingWithGemini = async (prompt: string, imageBase64: s
     }
   };
 
-export const generateVideoFromImage = async (prompt: string, imageBase64: string, imageType: string): Promise<string | null> => {
-    // Re-initialize the client to ensure the latest API key from the selection dialog is used.
+export const convertGifToMp4 = async (imageBase64: string, imageType: string, dimensions: { width: number; height: number; }): Promise<string | null> => {
     const videoAi = new GoogleGenAI({ apiKey: process.env.API_KEY });
     try {
+        const aspectRatio = dimensions.width >= dimensions.height ? '16:9' : '9:16';
         let operation = await videoAi.models.generateVideos({
             model: 'veo-3.1-fast-generate-preview',
-            prompt: prompt,
+            prompt: "Faithfully convert this animated GIF into a smooth, high-quality MP4 video. Preserve the original motion, style, and aspect ratio as closely as possible.",
             image: {
                 imageBytes: imageBase64.split(',')[1],
                 mimeType: imageType,
@@ -94,7 +99,7 @@ export const generateVideoFromImage = async (prompt: string, imageBase64: string
             config: {
                 numberOfVideos: 1,
                 resolution: '720p',
-                aspectRatio: '16:9' 
+                aspectRatio: aspectRatio,
             }
         });
 
@@ -105,13 +110,12 @@ export const generateVideoFromImage = async (prompt: string, imageBase64: string
 
         const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
         if (downloadLink) {
-             // The response.body contains the MP4 bytes. You must append an API key when fetching from the download link.
             return `${downloadLink}&key=${process.env.API_KEY}`;
         }
         return null;
     } catch (error) {
-        console.error('Error generating video:', error);
-        throw error; // Re-throw to be caught by the component
+        console.error('Error converting GIF to MP4:', error);
+        throw error;
     }
 };
 

@@ -18,7 +18,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) =
         const base64 = await fileToBase64(file);
         onImageUpload({ name: file.name, type: file.type, base64, size: file.size });
       } else {
-        alert('Please upload a valid image file (JPEG, PNG, WEBP).');
+        alert('Please upload a valid image file (JPEG, PNG, WEBP, GIF).');
       }
     }
   };
@@ -57,7 +57,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) =
                 type="file"
                 id="file-upload"
                 className="hidden"
-                accept="image/jpeg, image/png, image/webp"
+                accept="image/jpeg, image/png, image/webp, image/gif"
                 onChange={(e) => handleFileChange(e.target.files)}
             />
             <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer space-y-4">
@@ -67,7 +67,7 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) =
                 <button type="button" className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-300">
                     Browse Files
                 </button>
-                <p className="text-sm text-gray-500 pt-4">Supports JPEG, PNG, WEBP</p>
+                <p className="text-sm text-gray-500 pt-4">Supports JPEG, PNG, WEBP, GIF</p>
             </label>
         </div>
     </div>

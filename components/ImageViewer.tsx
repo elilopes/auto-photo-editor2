@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
 import type { Tool } from '../types';
@@ -6,7 +7,7 @@ import { Image, Download, Globe, Link, Loader2 } from 'lucide-react';
 
 interface ImageViewerProps {
   processedImage: string | null;
-  generatedVideoUrl: string | null;
+  generatedMp4Url: string | null;
   cartoonImages: string[] | null;
   generatedImages: string[] | null;
   threeDImages: string[] | null;
@@ -15,7 +16,8 @@ interface ImageViewerProps {
   artImages: string[] | null;
   photoShootImages: string[] | null;
   artMovementImages: string[] | null;
-  virtualTrialImages: string[] | null;
+  hairstyleImages: string[] | null;
+  virtualTryOnImage: string | null;
   webSearchResults: { summary: string; links: { uri: string; title: string }[] } | null;
   onDownloadCartoon: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadGeneratedImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
@@ -25,7 +27,8 @@ interface ImageViewerProps {
   onDownloadArtImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadPhotoShootImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadArtMovementImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
-  onDownloadVirtualTrialImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadHairstyleImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadVirtualTryOnImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   activeTool: Tool | null;
   imgRef: React.RefObject<HTMLImageElement>;
   maskCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -351,7 +354,7 @@ const ArtMovementViewer: React.FC<{
       );
 };
 
-const VirtualTrialOption: React.FC<{
+const HairstyleOption: React.FC<{
     image: string;
     title: string;
     onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
@@ -383,7 +386,7 @@ const VirtualTrialOption: React.FC<{
     );
 };
   
-const VirtualTrialViewer: React.FC<{
+const HairstyleViewer: React.FC<{
       images: string[];
       onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
 }> = ({ images, onDownload }) => {
@@ -391,7 +394,7 @@ const VirtualTrialViewer: React.FC<{
       return (
           <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
               {images.map((img, index) => (
-                  <VirtualTrialOption
+                  <HairstyleOption
                       key={index}
                       image={img}
                       title={titles[index]}
@@ -556,7 +559,7 @@ const WebSearchResultsViewer: React.FC<{
 };
 
 
-export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, generatedVideoUrl, cartoonImages, generatedImages, threeDImages, dollImages, bwImages, artImages, photoShootImages, artMovementImages, virtualTrialImages, webSearchResults, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, onDownloadBwImage, onDownloadArtImage, onDownloadPhotoShootImage, onDownloadArtMovementImage, onDownloadVirtualTrialImage, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom, isLoading, loadingMessage }) => {
+export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, generatedMp4Url, cartoonImages, generatedImages, threeDImages, dollImages, bwImages, artImages, photoShootImages, artMovementImages, hairstyleImages, virtualTryOnImage, webSearchResults, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, onDownloadBwImage, onDownloadArtImage, onDownloadPhotoShootImage, onDownloadArtMovementImage, onDownloadHairstyleImage, onDownloadVirtualTryOnImage, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom, isLoading, loadingMessage }) => {
     const [isDrawing, setIsDrawing] = useState(false);
     const drawingWrapperRef = useRef<HTMLDivElement>(null);
     const viewerContainerRef = useRef<HTMLDivElement>(null);
@@ -744,11 +747,22 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
             return <GeneratedImageViewer images={generatedImages} onDownload={onDownloadGeneratedImage} />;
         }
 
-        if (generatedVideoUrl) {
+        if (generatedMp4Url) {
             return (
-                 <video src={generatedVideoUrl} controls autoPlay loop style={imageStyles}>
+                 <video src={generatedMp4Url} controls autoPlay loop style={imageStyles}>
                     Your browser does not support the video tag.
                  </video>
+            );
+        }
+        
+        if (activeTool === 'virtual-try-on' && virtualTryOnImage) {
+            return (
+                <div className="w-full h-full flex items-center justify-center p-4">
+                    <GeneratedImageOption
+                        image={virtualTryOnImage}
+                        onDownload={(format) => onDownloadVirtualTryOnImage(virtualTryOnImage, format)}
+                    />
+                </div>
             );
         }
 
@@ -768,8 +782,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
             return <ArtMovementViewer images={artMovementImages} onDownload={onDownloadArtMovementImage} />;
         }
 
-        if (activeTool === 'virtual-trial' && virtualTrialImages?.length) {
-            return <VirtualTrialViewer images={virtualTrialImages} onDownload={onDownloadVirtualTrialImage} />;
+        if (activeTool === 'hairstyle-trial' && hairstyleImages?.length) {
+            return <HairstyleViewer images={hairstyleImages} onDownload={onDownloadHairstyleImage} />;
         }
 
         if (activeTool === 'black-and-white' && bwImages?.length) {
