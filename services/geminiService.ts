@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI, Modality } from "@google/genai";
 
 const fileToGenerativePart = (base64: string, mimeType: string) => {

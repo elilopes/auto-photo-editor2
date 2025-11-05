@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Tool, ImageFile } from '../types';
-// Fix: Replaced non-existent 'Cube' icon with 'Box' from lucide-react.
-import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, Film, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info } from 'lucide-react';
+import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, Film, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info, Shirt, Camera, GalleryThumbnails, Scissors, Pilcrow } from 'lucide-react';
 
 interface ControlPanelProps {
   imageFile: ImageFile | null;
@@ -11,7 +10,11 @@ interface ControlPanelProps {
   onExpand: () => void;
   onRemoveBackground: () => void;
   onPortraitRetouch: () => void;
+  onContextualText: () => void;
+  contextualTextPrompt: string;
+  setContextualTextPrompt: (prompt: string) => void;
   onCartoonify: () => void;
+  onGenerateBwStyles: () => void;
   on3dDrawing: () => void;
   onDollify: () => void;
   onGenerateImages: (prompt: string) => void;
@@ -19,14 +22,11 @@ interface ControlPanelProps {
   onAnimate: (prompt: string) => void;
   isApiKeySelected: boolean;
   setIsApiKeySelected: (isSelected: boolean) => void;
-  onClassicBW: () => void;
-  onHighContrastBW: () => void;
-  onSepia: () => void;
-  onBlueTone: () => void;
-  onLomo: () => void;
-  onVintageFade: () => void;
-  onGoldenHour: () => void;
-  onCyberpunk: () => void;
+  onGenerateArtStyles: () => void;
+  onArtMovements: () => void;
+  onHoldMyDoll: () => void;
+  onPhotoShoot: () => void;
+  onVirtualTrial: () => void;
   onCrop: () => void;
   onCropConfirm: () => void;
   onResize: (width: number, height: number) => void;
@@ -175,7 +175,7 @@ const ViewControls: React.FC<{
     onResetZoom: () => void;
 }> = ({ activeTool, isImageLoaded, onCrop, onCropConfirm, zoom, onZoomIn, onZoomOut, onResetZoom }) => {
     const [isOpen, setIsOpen] = useState(true);
-    const nonZoomableTools: (Tool | null)[] = ['video', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search'];
+    const nonZoomableTools: (Tool | null)[] = ['video', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search', 'black-and-white', 'art-effects', 'photo-shoot', 'art-movements', 'virtual-trial'];
     const isZoomable = isImageLoaded && !nonZoomableTools.includes(activeTool);
 
     return (
@@ -299,9 +299,16 @@ const AIFunctionsCollapse: React.FC<{
     onColorize: () => void;
     onExpand: () => void;
     onRemoveBackground: () => void;
+    onContextualText: () => void;
+    contextualTextPrompt: string;
+    setContextualTextPrompt: (value: string) => void;
     onCartoonify: () => void;
+    onGenerateBwStyles: () => void;
     on3dDrawing: () => void;
     onDollify: () => void;
+    onHoldMyDoll: () => void;
+    onPhotoShoot: () => void;
+    onVirtualTrial: () => void;
     onWebSearch: () => void;
     onAnimate: (prompt: string) => void;
     animationPrompt: string;
@@ -326,13 +333,34 @@ const AIFunctionsCollapse: React.FC<{
                       <ControlButton icon={<Wand2 size={20} />} text="Restore Photo" onClick={props.onRestore} />
                       <ControlButton icon={<UserCheck size={20} />} text="Retouch Portrait" onClick={props.onPortraitRetouch} />
                       <ControlButton icon={<Palette size={20} />} text="Colorize" onClick={props.onColorize} />
+                      <ControlButton icon={<Droplets size={20} />} text="Generate B&W Styles" onClick={props.onGenerateBwStyles} />
                       <ControlButton icon={<Expand size={20} />} text="Expand Image" onClick={props.onExpand} />
                       <ControlButton icon={<Layers size={20} />} text="Remove Background" onClick={props.onRemoveBackground} />
                       <ControlButton icon={<Smile size={20} />} text="Cartoonify" onClick={props.onCartoonify} />
                       <ControlButton icon={<Box size={20} />} text="Transform to 3D Drawing" onClick={props.on3dDrawing} />
                       <ControlButton icon={<SmilePlus size={20} />} text="Dollify" onClick={props.onDollify} />
+                      <ControlButton icon={<SmilePlus size={20} />} text="Hold My Doll" onClick={props.onHoldMyDoll} description="Creates a doll of you and puts it in your hands." />
+                      <ControlButton icon={<Camera size={20} />} text="AI Photo Shoot" onClick={props.onPhotoShoot} description="Generate 4 new poses in 4 new scenes." />
+                      <ControlButton icon={<Scissors size={20} />} text="Virtual Hairstyle Trial" onClick={props.onVirtualTrial} description="Try on 4 different hairstyles." />
                       <ControlButton icon={<Globe size={20} />} text="Web Image Search" onClick={props.onWebSearch} />
                       
+                      <div className="bg-gray-900 p-4 rounded-lg space-y-3">
+                          <h3 className="font-semibold text-white flex items-center"><Pilcrow size={18} className="mr-2" />Contextual Text</h3>
+                          <textarea
+                              value={props.contextualTextPrompt}
+                              onChange={(e) => props.setContextualTextPrompt(e.target.value)}
+                              placeholder="e.g., Happy Birthday, Summer 2024..."
+                              className="w-full h-24 p-2 bg-gray-700 text-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                          />
+                          <button
+                              onClick={props.onContextualText}
+                              disabled={!props.contextualTextPrompt.trim() || !props.isImageLoaded}
+                              className="w-full py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                              <Pilcrow size={20} className="mr-2" /> Add Text to Image
+                          </button>
+                      </div>
+
                       <div className="bg-gray-900 p-4 rounded-lg space-y-3">
                           <h3 className="font-semibold text-white flex items-center"><Film size={18} className="mr-2" />Animate Image</h3>
                           <textarea
@@ -347,8 +375,10 @@ const AIFunctionsCollapse: React.FC<{
                                   <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mb-2 block">Learn about billing</a>
                                   <button 
                                       onClick={async () => {
-                                          await window.aistudio.openSelectKey();
-                                          props.setIsApiKeySelected(true);
+                                          if (window.aistudio && window.aistudio.openSelectKey) {
+                                            await window.aistudio.openSelectKey();
+                                            props.setIsApiKeySelected(true);
+                                          }
                                       }}
                                       className="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
                                   >
@@ -380,8 +410,10 @@ const AIFunctionsCollapse: React.FC<{
                                   <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mb-2 block">Learn about billing</a>
                                   <button 
                                       onClick={async () => {
+                                        if (window.aistudio && window.aistudio.openSelectKey) {
                                           await window.aistudio.openSelectKey();
                                           props.setIsApiKeySelected(true);
+                                        }
                                       }}
                                       className="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
                                   >
@@ -405,17 +437,10 @@ const AIFunctionsCollapse: React.FC<{
 }
 
 const ArtisticEffectsCollapse: React.FC<{
-    onClassicBW: () => void;
-    onHighContrastBW: () => void;
-    onSepia: () => void;
-    onBlueTone: () => void;
-    onLomo: () => void;
-    onVintageFade: () => void;
-    onGoldenHour: () => void;
-    onCyberpunk: () => void;
+    onGenerateArtStyles: () => void;
+    onArtMovements: () => void;
   }> = (props) => {
     const [isOpen, setIsOpen] = useState(true);
-    const [activeSubMenu, setActiveSubMenu] = useState<'bw' | 'art' | null>(null);
 
     return (
         <div className="bg-gray-800 rounded-lg">
@@ -425,32 +450,18 @@ const ArtisticEffectsCollapse: React.FC<{
             </button>
             {isOpen && (
                 <div className="p-4 space-y-3">
-                    {/* B&W Styles */}
-                    <button onClick={() => setActiveSubMenu(activeSubMenu === 'bw' ? null : 'bw')} className="w-full flex items-center justify-between p-3 rounded-lg text-left font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">
-                        <span className="flex items-center"><Droplets size={18} className="mr-2"/> Black & White Styles</span>
-                        <ChevronDown size={20} className={`transition-transform duration-200 ${activeSubMenu === 'bw' ? 'rotate-180' : ''}`} />
-                    </button>
-                    {activeSubMenu === 'bw' && (
-                        <div className="pl-4 pt-2 space-y-2 border-l-2 border-gray-600">
-                            <ControlButton onClick={props.onClassicBW} icon={<></>} text="Classic" description="Balanced grayscale conversion." />
-                            <ControlButton onClick={props.onHighContrastBW} icon={<></>} text="High Contrast" description="Dramatic, punchy B&W." />
-                            <ControlButton onClick={props.onSepia} icon={<></>} text="Sepia" description="Warm, vintage brown tint." />
-                            <ControlButton onClick={props.onBlueTone} icon={<></>} text="Blue Tone" description="Cool, cyanotype effect." />
-                        </div>
-                    )}
-                    {/* Art Effects */}
-                    <button onClick={() => setActiveSubMenu(activeSubMenu === 'art' ? null : 'art')} className="w-full flex items-center justify-between p-3 rounded-lg text-left font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">
-                        <span className="flex items-center"><Palette size={18} className="mr-2"/> Art Effects</span>
-                        <ChevronDown size={20} className={`transition-transform duration-200 ${activeSubMenu === 'art' ? 'rotate-180' : ''}`} />
-                    </button>
-                    {activeSubMenu === 'art' && (
-                        <div className="pl-4 pt-2 space-y-2 border-l-2 border-gray-600">
-                           <ControlButton onClick={props.onLomo} icon={<></>} text="Lomo" description="Saturated, high-contrast look." />
-                           <ControlButton onClick={props.onVintageFade} icon={<></>} text="Vintage Fade" description="Retro, washed-out colors." />
-                           <ControlButton onClick={props.onGoldenHour} icon={<></>} text="Golden Hour" description="Soft, warm sunset glow." />
-                           <ControlButton onClick={props.onCyberpunk} icon={<></>} text="Cyberpunk" description="Futuristic neon highlights." />
-                        </div>
-                    )}
+                    <ControlButton 
+                        icon={<Palette size={20} />} 
+                        text="Generate B&W Styles" 
+                        onClick={props.onGenerateArtStyles} 
+                        description="Create 4 artistic black & white variations." 
+                    />
+                    <ControlButton 
+                        icon={<GalleryThumbnails size={20} />} 
+                        text="Art Movements" 
+                        onClick={props.onArtMovements} 
+                        description="Recreate image in 4 famous art styles." 
+                    />
                 </div>
             )}
         </div>
@@ -502,9 +513,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     onColorize={props.onColorize}
                     onExpand={props.onExpand}
                     onRemoveBackground={props.onRemoveBackground}
+                    onContextualText={props.onContextualText}
+                    contextualTextPrompt={props.contextualTextPrompt}
+                    setContextualTextPrompt={props.setContextualTextPrompt}
                     onCartoonify={props.onCartoonify}
+                    onGenerateBwStyles={props.onGenerateBwStyles}
                     on3dDrawing={props.on3dDrawing}
                     onDollify={props.onDollify}
+                    onHoldMyDoll={props.onHoldMyDoll}
+                    onPhotoShoot={props.onPhotoShoot}
+                    onVirtualTrial={props.onVirtualTrial}
                     onWebSearch={props.onWebSearch}
                     onAnimate={props.onAnimate}
                     animationPrompt={animationPrompt}
@@ -518,14 +536,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 />
 
                 <ArtisticEffectsCollapse
-                    onClassicBW={props.onClassicBW}
-                    onHighContrastBW={props.onHighContrastBW}
-                    onSepia={props.onSepia}
-                    onBlueTone={props.onBlueTone}
-                    onLomo={props.onLomo}
-                    onVintageFade={props.onVintageFade}
-                    onGoldenHour={props.onGoldenHour}
-                    onCyberpunk={props.onCyberpunk}
+                    onGenerateArtStyles={props.onGenerateArtStyles}
+                    onArtMovements={props.onArtMovements}
                 />
 
                 <ViewControls
@@ -626,7 +638,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 <div className="relative">
                     <button 
                       onClick={() => setShowDownloadOptions(!showDownloadOptions)} 
-                      disabled={!props.isImageLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify'}
+                      disabled={!props.isImageLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify' || props.activeTool === 'black-and-white' || props.activeTool === 'art-effects' || props.activeTool === 'photo-shoot' || props.activeTool === 'art-movements' || props.activeTool === 'virtual-trial'}
                       className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <Download size={20} />
                         <span>Save Image</span>

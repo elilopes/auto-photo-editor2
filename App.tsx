@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Crop } from 'react-image-crop';
 import { Header } from './components/Header';
@@ -8,17 +9,20 @@ import { ImageViewer } from './components/ImageViewer';
 import { processImageWithGemini, generateVideoFromImage, processInpaintingWithGemini, generateImagesFromText, searchWebForSimilarImages } from './services/geminiService';
 import { applyAdjustments, cropImage, downloadImage, fileToBase64, resizeImage } from './utils/imageUtils';
 import type { Tool, ImageFile } from './types';
-import { Dna } from 'lucide-react';
 
 const App: React.FC = () => {
   const [imageFile, setImageFile] = useState<ImageFile | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
-  const [beforeImage, setBeforeImage] = useState<string | null>(null);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [cartoonImages, setCartoonImages] = useState<string[] | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
   const [threeDImages, setThreeDImages] = useState<string[] | null>(null);
   const [dollImages, setDollImages] = useState<string[] | null>(null);
+  const [bwImages, setBwImages] = useState<string[] | null>(null);
+  const [artImages, setArtImages] = useState<string[] | null>(null);
+  const [photoShootImages, setPhotoShootImages] = useState<string[] | null>(null);
+  const [artMovementImages, setArtMovementImages] = useState<string[] | null>(null);
+  const [virtualTrialImages, setVirtualTrialImages] = useState<string[] | null>(null);
   const [webSearchResults, setWebSearchResults] = useState<{ summary: string; links: { uri: string; title: string }[] } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
@@ -28,11 +32,11 @@ const App: React.FC = () => {
   const [isApiKeySelected, setIsApiKeySelected] = useState<boolean>(false);
   const [brightness, setBrightness] = useState(100);
   const [contrast, setContrast] = useState(100);
-  const [rotation, setRotation] = useState(0); // Kept for potential future use with steps
   const [angle, setAngle] = useState(0);
   const [gamma, setGamma] = useState(100);
   const [sharpness, setSharpness] = useState(0);
   const [colorChangePrompt, setColorChangePrompt] = useState('');
+  const [contextualTextPrompt, setContextualTextPrompt] = useState('');
   const [zoom, setZoom] = useState(1);
   const [imageDimensions, setImageDimensions] = useState<{width: number; height: number} | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -98,21 +102,20 @@ const App: React.FC = () => {
   const resetAdjustments = () => {
     setBrightness(100);
     setContrast(100);
-    setRotation(0);
     setAngle(0);
     setGamma(100);
     setSharpness(0);
   };
 
   const getAdjustedImage = useCallback(async (): Promise<string> => {
-    const imageToAdjust = cartoonImages ? history[history.length - 1] : processedImage;
+    const imageToAdjust = history.length > 0 ? history[history.length - 1] : processedImage;
     if (!imageToAdjust) return '';
     if (brightness === 100 && contrast === 100 && angle === 0 && gamma === 100 && sharpness === 0) {
         return imageToAdjust;
     }
     const adjusted = await applyAdjustments(imageToAdjust, brightness, contrast, angle, gamma, sharpness);
     return adjusted;
-  }, [processedImage, cartoonImages, history, brightness, contrast, angle, gamma, sharpness]);
+  }, [processedImage, history, brightness, contrast, angle, gamma, sharpness]);
   
   const updateProcessedImage = (newImage: string, keepAdjustments = false) => {
     setProcessedImage(newImage);
@@ -121,6 +124,11 @@ const App: React.FC = () => {
     setGeneratedImages(null);
     setThreeDImages(null);
     setDollImages(null);
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
     setWebSearchResults(null);
     setHistory(prev => [...prev, newImage]);
     if (!keepAdjustments) {
@@ -132,12 +140,16 @@ const App: React.FC = () => {
     setImageFile(file);
     setActiveTool(null);
     setCrop(undefined);
-    setBeforeImage(null);
     setGeneratedVideoUrl(null);
     setCartoonImages(null);
     setGeneratedImages(null);
     setThreeDImages(null);
     setDollImages(null);
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
     setWebSearchResults(null);
     setZoom(1);
   };
@@ -164,6 +176,11 @@ const App: React.FC = () => {
     setGeneratedImages(null);
     setThreeDImages(null);
     setDollImages(null);
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
     setWebSearchResults(null);
     resetAdjustments();
     if (history.length > 1) {
@@ -184,6 +201,11 @@ const App: React.FC = () => {
     setGeneratedImages(null);
     setThreeDImages(null);
     setDollImages(null);
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
     setWebSearchResults(null);
     try {
       const imageToSend = await getAdjustedImage();
@@ -198,7 +220,57 @@ const App: React.FC = () => {
       setIsLoading(false);
       setLoadingMessage('');
     }
-  }, [imageFile, getAdjustedImage]);
+  }, [imageFile, processedImage, getAdjustedImage]);
+
+  const handleMultipleIndividualImageRequests = useCallback(async (
+    prompts: string[], 
+    message: string, 
+    tool: Tool, 
+    setter: React.Dispatch<React.SetStateAction<string[] | null>>
+  ) => {
+    if (!imageFile) return;
+    setIsLoading(true);
+    setLoadingMessage(message);
+    setActiveTool(tool);
+    // Reset all other views
+    setGeneratedVideoUrl(null);
+    setCartoonImages(null);
+    setGeneratedImages(null);
+    setThreeDImages(null);
+    setDollImages(null);
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
+    setWebSearchResults(null);
+    setProcessedImage(null); // Hide the main viewer image
+
+    try {
+      const imageToSend = await getAdjustedImage();
+      const resultsPromises = prompts.map(prompt => 
+        processImageWithGemini(prompt, imageToSend, imageFile.type)
+      );
+      const results = await Promise.all(resultsPromises);
+      const filteredResults = results.filter((r): r is string => r !== null);
+      
+      if (filteredResults.length > 0) {
+        setter(filteredResults);
+      } else {
+        alert("The AI could not generate images for this request. Please try again.");
+        setActiveTool(null);
+        setProcessedImage(history[history.length - 1]);
+      }
+    } catch (error) {
+      console.error("Error processing multi-image request:", error);
+      alert("An error occurred while generating the images. Please try again.");
+      setActiveTool(null);
+      setProcessedImage(history[history.length - 1]);
+    } finally {
+      setIsLoading(false);
+      setLoadingMessage('');
+    }
+  }, [imageFile, getAdjustedImage, history]);
   
   const handleAnimateImage = async (prompt: string) => {
     if (!processedImage || !imageFile) return;
@@ -212,11 +284,15 @@ const App: React.FC = () => {
         if (videoUrl) {
             setGeneratedVideoUrl(videoUrl);
             setProcessedImage(null);
-            setBeforeImage(null);
             setCartoonImages(null);
             setGeneratedImages(null);
             setThreeDImages(null);
             setDollImages(null);
+            setBwImages(null);
+            setArtImages(null);
+            setPhotoShootImages(null);
+            setArtMovementImages(null);
+            setVirtualTrialImages(null);
         }
     } catch (error: any) {
         console.error("Error generating video:", error);
@@ -232,60 +308,20 @@ const App: React.FC = () => {
     }
   };
 
-  const handleAutoAdjust = async () => {
-    if (!imageFile || !processedImage) return;
-
-    setIsLoading(true);
-    setLoadingMessage("Auto-adjusting image...");
-    setActiveTool('auto-adjust');
-
-    // Clear other special view states
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setWebSearchResults(null);
-
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt = "Automatically enhance and balance the quality, sharpness, and lighting of this old photograph. If the photograph is black and white, also colorize it with realistic colors. If it is already in color, do not change the existing colors.";
-      const result = await processImageWithGemini(prompt, imageToSend, imageFile.type);
-      if (result) {
-        updateProcessedImage(result);
-      } else {
-        // If result is null, don't change the image, just reset the tool
-        setActiveTool(null);
-        setBeforeImage(null);
-        throw new Error("Auto-adjustment failed to produce an image.");
-      }
-    } catch (error) {
-      console.error("Error auto-adjusting image:", error);
-      alert("An error occurred while auto-adjusting the image. Please try again.");
-      // On error, revert the tool state
-      setActiveTool(null);
-      setBeforeImage(null);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
+  const handleAutoAdjust = () => {
+    handleRequest("Automatically enhance and balance the quality, sharpness, and lighting of this old photograph. If the photograph is black and white, also colorize it with realistic colors. If it is already in color, do not change the existing colors.", "Auto-adjusting image...", 'auto-adjust');
   };
   const handleRestore = () => {
-    setBeforeImage(null);
-    handleRequest("Restore this damaged old photograph. Remove scratches, fix tears, clean up blemishes, and improve overall quality. IMPORTANT: Do not add color or change the existing colors. If the photo is black and white, it must remain black and white.", "Restoring photo...", null);
+    handleRequest("Restore this damaged old photograph. Remove scratches, fix tears, clean up blemishes, and improve overall quality. IMPORTANT: Do not add color or change the existing colors. If the photo is black and white, it must remain black and white.", "Restoring photo...", 'restore');
   }
   const handleColorize = () => {
-    if (!processedImage) return;
-    setBeforeImage(null);
-    handleRequest("Colorize this black and white photograph. IMPORTANT: Do not restore, repair, or alter the original texture, scratches, or imperfections. Only add realistic color to the existing image.", "Colorizing photo...", null);
+    handleRequest("Colorize this black and white photograph. IMPORTANT: Do not restore, repair, or alter the original texture, scratches, or imperfections. Only add realistic color to the existing image.", "Colorizing photo...", 'colorize');
   };
   const handleExpand = () => {
-    setBeforeImage(null);
-    handleRequest("Expand the boundaries of this image (outpainting), continuing the scene naturally and realistically.", "Expanding image...", null);
+    handleRequest("Expand the boundaries of this image (outpainting), continuing the scene naturally and realistically.", "Expanding image...", 'expand');
   }
 
   const handleRemoveBackground = () => {
-    setBeforeImage(null);
     handleRequest(
         "Remove the background from this image, leaving only the main subject. The new background must be transparent. Output the result as a PNG file.", 
         "Removing background...", 
@@ -294,176 +330,119 @@ const App: React.FC = () => {
   };
 
   const handlePortraitRetouch = () => {
-    setBeforeImage(null);
     handleRequest(
-      "Perform a professional portrait retouch on this photograph. Focus on the human face(s). The retouching should be natural and subtle. Specific tasks: 1. Smooth the skin to reduce minor wrinkles, expression lines, and imperfections, but preserve the natural skin texture. Do not make it look like plastic. 2. Whiten the teeth slightly for a brighter, healthier smile. The whitening should look natural, not overly bright. 3. Remove temporary blemishes like acne or spots. Do not remove permanent features like moles or scars unless they are very minor. 4. Subtly even out the skin tone, reducing redness or blotchiness. Ensure the final skin tone looks natural and matches the person's ethnicity. IMPORTANT: Only apply these changes to the person/people in the photo. The background and clothing should remain untouched.",
+      "Perform a professional portrait retouch on this photograph. Focus on the human face(s). The retouching should be natural and subtle. Specific tasks: 1. Smooth the skin to reduce minor wrinkles, expression lines, and imperfections, but preserve the natural skin texture. Do not make it look like plastic. 2. Whiten the teeth slightly for a brighter, healthier smile. The whitening should look natural, not overly bright. 3. Remove temporary blemishes like acne or spots. Do not remove permanent features like moles or scars unless they are very minor. 4. Subtly even out the skin tone, reducing redness or blotchiness. Ensure the final skin tone looks natural and matches the person's ethnicity. IMPORTANT: Only apply these changes to the person's face and do not alter the background, hair, or clothing.",
       "Retouching portrait...",
       'portrait-retouch'
     );
   };
 
-  const handleCartoonify = async () => {
-    if (!imageFile) return;
-    setIsLoading(true);
-    setLoadingMessage("Applying cartoon styles...");
-    setActiveTool('cartoonify');
-    setGeneratedVideoUrl(null);
-    setProcessedImage(null);
-    setBeforeImage(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setWebSearchResults(null);
-
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt1 = "Transform this photo into a vibrant, colorful cartoon with bold outlines, similar to a modern animated movie style.";
-      const prompt2 = "Convert this image into a classic, hand-drawn comic book style cartoon, using halftones and a more muted color palette.";
-      const prompt3 = "Reimagine this photo in a Japanese anime/manga style, featuring sharp lines, cel-shading, and expressive features.";
-      const prompt4 = "Turn this image into a soft, whimsical watercolor cartoon illustration with gentle lines and blended colors.";
-
-      const [result1, result2, result3, result4] = await Promise.all([
-        processImageWithGemini(prompt1, imageToSend, imageFile.type),
-        processImageWithGemini(prompt2, imageToSend, imageFile.type),
-        processImageWithGemini(prompt3, imageToSend, imageFile.type),
-        processImageWithGemini(prompt4, imageToSend, imageFile.type)
-      ]);
-
-      if (result1 && result2 && result3 && result4) {
-        setCartoonImages([result1, result2, result3, result4]);
-      } else {
-        throw new Error("One or more cartoon styles could not be generated.");
-      }
-    } catch (error) {
-      console.error("Error generating cartoon styles:", error);
-      alert("An error occurred while cartoonifying the image. Please try again.");
-      setActiveTool(null);
-      setProcessedImage(history[history.length - 1]);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
+  const handleContextualText = () => {
+    if (!contextualTextPrompt.trim()) {
+        alert('Please enter the text you want to add.');
+        return;
     }
+    const prompt = `Analyze this image. The user wants to add the following text: '${contextualTextPrompt}'. Your task is to intelligently integrate this text into the image. Consider the image's content, style, and composition. Choose the most appropriate: 1. **Positioning**: Where should the text be placed to look natural and aesthetically pleasing? 2. **Font/Style**: What font or style fits the image? (e.g., elegant script for a wedding photo, carved letters on a tree, neon glow on a city wall, written in the sand on a beach). 3. **Color and Lighting**: What color should the text be? How should it be affected by the image's lighting and shadows? Make it look like a real part of the scene. Apply the text and return the modified image.`;
+    handleRequest(prompt, "Adding text intelligently...", 'contextual-text');
   };
 
-  const handle3dDrawing = async () => {
-    if (!imageFile) return;
-    setIsLoading(true);
-    setLoadingMessage("Generating 3D drawing styles...");
-    setActiveTool('3d-drawing');
-    setGeneratedVideoUrl(null);
-    setProcessedImage(null);
-    setBeforeImage(null);
-    setGeneratedImages(null);
-    setCartoonImages(null);
-    setDollImages(null);
-    setWebSearchResults(null);
-  
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt1 = "Convert this photo into a 3D line drawing with clean, sharp black outlines on a white background, giving it a technical, architectural sketch look.";
-      const prompt2 = "Transform this image into a stylized 3D model render with soft ambient occlusion shading and subtle depth, resembling a clay model or digital sculpture.";
-  
-      const [result1, result2] = await Promise.all([
-        processImageWithGemini(prompt1, imageToSend, imageFile.type),
-        processImageWithGemini(prompt2, imageToSend, imageFile.type),
-      ]);
-  
-      if (result1 && result2) {
-        setThreeDImages([result1, result2]);
-      } else {
-        throw new Error("One or more 3D styles could not be generated.");
-      }
-    } catch (error) {
-      console.error("Error generating 3D styles:", error);
-      alert("An error occurred while generating 3D drawings. Please try again.");
-      setActiveTool(null);
-      setProcessedImage(history[history.length - 1]);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
+  const handleHoldMyDoll = () => {
+    const prompt = "This is a two-part task. First, analyze the main person in the photograph to understand their facial features, hairstyle, and clothing. Second, create a photorealistic miniature doll that is a replica of this person. Finally, edit the original image to show the person naturally holding this newly created doll. Ensure the hands, lighting, and shadows are realistic and perfectly match the original photo's style, creating a single, seamless image.";
+    handleRequest(prompt, "Creating your mini-me doll...", 'hold-my-doll');
   };
 
-  const handleDollify = async () => {
-    if (!imageFile) return;
-    setIsLoading(true);
-    setLoadingMessage("Applying doll styles...");
-    setActiveTool('dollify');
-    setGeneratedVideoUrl(null);
-    setProcessedImage(null);
-    setBeforeImage(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setCartoonImages(null);
-    setWebSearchResults(null);
+  const handlePhotoShoot = () => {
+    const prompts = [
+      "Analyze the main person in the provided photograph. Generate a new, full-body, photorealistic image of this exact same person casually leaning against a graffiti-covered brick wall in a vibrant city alley. Ensure the person's face, hair, and key features are consistently and accurately reproduced. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, full-body, photorealistic image of this exact same person sitting at a rustic wooden table in a cozy, Parisian café, holding a coffee cup. Ensure the person's face, hair, and key features are consistently and accurately reproduced. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, full-body, photorealistic image of this exact same person walking along a beautiful, sunny beach at sunset. Ensure the person's face, hair, and key features are consistently and accurately reproduced. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, full-body, photorealistic image of this exact same person dressed in professional attire, confidently standing in a modern, minimalist office with a city view. Ensure the person's face, hair, and key features are consistently and accurately reproduced. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Generating your AI photo shoot...", 'photo-shoot', setPhotoShootImages);
+  };
 
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt1 = "Transform this photo into the style of a delicate, vintage porcelain doll with a glossy finish, rosy cheeks, and glass-like eyes.";
-      const prompt2 = "Reimagine this person as a charming, handcrafted rag doll with button eyes, stitched details, and a soft, fabric texture.";
-      const prompt3 = "Convert this image to look like a modern, articulated ball-jointed doll (BJD) with large, expressive eyes, a matte resin finish, and distinct joints.";
-      const prompt4 = "Turn this photo into a cute, stylized plastic toy doll, similar to a 'Funko Pop' or 'chibi' character, with oversized features and a simple, clean look.";
+  const handleVirtualTrial = () => {
+    const prompts = [
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with a chic, chin-length bob hairstyle. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with long, wavy beach curls. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with a stylish pixie cut. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with an elegant braided updo. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Generating hairstyle trials...", 'virtual-trial', setVirtualTrialImages);
+  };
 
-      const [result1, result2, result3, result4] = await Promise.all([
-        processImageWithGemini(prompt1, imageToSend, imageFile.type),
-        processImageWithGemini(prompt2, imageToSend, imageFile.type),
-        processImageWithGemini(prompt3, imageToSend, imageFile.type),
-        processImageWithGemini(prompt4, imageToSend, imageFile.type)
-      ]);
+  const handleCartoonify = () => {
+    const prompts = [
+      "Transform this photo into a modern animated movie style. Return only the resulting image.",
+      "Transform this photo into a classic comic book style. Return only the resulting image.",
+      "Transform this photo into a Japanese anime/manga style. Return only the resulting image.",
+      "Transform this photo into a watercolor cartoon style. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Cartoonifying...", 'cartoonify', setCartoonImages);
+  };
 
-      if (result1 && result2 && result3 && result4) {
-        setDollImages([result1, result2, result3, result4]);
-      } else {
-        throw new Error("One or more doll styles could not be generated.");
-      }
-    } catch (error) {
-      console.error("Error generating doll styles:", error);
-      alert("An error occurred while applying doll styles to the image. Please try again.");
-      setActiveTool(null);
-      setProcessedImage(history[history.length - 1]);
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-    }
+  const handleBlackAndWhiteStyles = () => {
+    const prompts = [
+      "Transform this photo into a classic, balanced black and white style. Return only the resulting image.",
+      "Transform this photo into a high-contrast, dramatic black and white style with deep blacks and bright whites. Return only the resulting image.",
+      "Transform this photo into a soft, low-contrast black and white style with a vintage feel. Return only the resulting image.",
+      "Transform this photo into a grainy, film-noir style black and white. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Generating B&W styles...", 'black-and-white', setBwImages);
+  };
+
+  const handleGenerateArtStyles = () => {
+    const prompts = [
+      "Transform this photo into a classic, high-contrast film noir style with deep blacks and dramatic shadows. Return only the resulting image.",
+      "Transform this photo into a soft-focus, low-contrast monochrome with a dreamy, ethereal feel. Return only the resulting image.",
+      "Transform this photo into a vintage sepia-toned black and white, giving it an old-photograph look. Return only the resulting image.",
+      "Transform this photo into a grainy, high-speed film black and white effect, simulating classic reportage photography. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Generating artistic B&W styles...", 'art-effects', setArtImages);
+  };
+
+  const handleArtMovements = () => {
+    const prompts = [
+      "Recreate this photo in the style of Impressionism, with visible brush strokes and an emphasis on light. Return only the resulting image.",
+      "Recreate this photo in the style of Cubism, breaking down the subject into geometric forms and showing it from multiple viewpoints. Return only the resulting image.",
+      "Recreate this photo in the style of Surrealism, creating a dreamlike, bizarre, and illogical scene. Return only the resulting image.",
+      "Recreate this photo in the style of the Baroque artistic movement, with dramatic, intense lighting (chiaroscuro), rich colors, and a sense of movement and grandeur. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Applying artistic movements...", 'art-movements', setArtMovementImages);
+  };
+
+  const handle3dDrawing = () => {
+    const prompts = [
+      "Transform this photo into a clean 3D line art drawing. Return only the resulting image.",
+      "Transform this photo into a photorealistic clay model render. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Creating 3D drawings...", '3d-drawing', setThreeDImages);
+  };
+
+  const handleDollify = () => {
+    const prompts = [
+      "Transform the person in this photo to look like a porcelain doll. Return only the resulting image.",
+      "Transform the person in this photo to look like a classic rag doll. Return only the resulting image.",
+      "Transform the person in this photo to look like a ball-jointed doll (BJD). Return only the resulting image.",
+      "Transform the person in this photo to look like a plastic toy action figure. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Dollifying...", 'dollify', setDollImages);
   };
   
-  // Black and White Handlers
-  const handleClassicBW = () => handleRequest("Convert this photo to a classic, balanced black and white grayscale. Preserve details and texture. Do not add any color tint.", "Applying Classic B&W...", null);
-  const handleHighContrastBW = () => handleRequest("Convert this photo to a high-contrast black and white image. Make the blacks deep and the whites bright for a dramatic, punchy, film noir effect.", "Applying High Contrast B&W...", null);
-  const handleSepia = () => handleRequest("Apply a classic sepia tone to this photograph. Convert it to monochrome first, then add a warm, brownish tint for an antique, vintage look.", "Applying Sepia Tone...", null);
-  const handleBlueTone = () => handleRequest("Apply a cyanotype (blue tone) effect to this image. Convert it to monochrome and then give it a cool, rich blue tint throughout.", "Applying Blue Tone...", null);
-
-  // Art Effect Handlers
-  const handleLomo = () => handleRequest("Apply a strong Lomo camera effect to this image. This should include high contrast, oversaturated colors (especially reds and blues), and a prominent dark vignette around the edges.", "Applying Lomo Effect...", null);
-  const handleVintageFade = () => handleRequest("Give this photo a faded, vintage look. Desaturate the colors slightly, reduce the contrast to make the blacks appear grayish, and apply a subtle warm (yellowish/orange) tint to the entire image.", "Applying Vintage Fade...", null);
-  const handleGoldenHour = () => handleRequest("Apply a 'golden hour' effect to this photo. Enhance the warm tones, add a soft, diffused glow to the highlights, and give the entire image a radiant, warm, sunset-like feel.", "Applying Golden Hour Effect...", null);
-  const handleCyberpunk = () => handleRequest("Transform this photo with a cyberpunk neon aesthetic. Increase the contrast significantly, and shift the color palette so that highlights become vibrant magenta and cyan, and shadows become deep blues and purples. It should look like it was taken in a futuristic, neon-lit city.", "Applying Cyberpunk Effect...", null);
-
-
   const handleGenerateImages = async (prompt: string) => {
+    if (!prompt.trim()) return;
     setIsLoading(true);
-    setLoadingMessage("Generating images from your prompt...");
+    setLoadingMessage("Generating images...");
     setActiveTool('generate');
-    // Clear the entire editor state for a fresh start
-    setImageFile(null);
     setProcessedImage(null);
-    setBeforeImage(null);
-    setHistory([]);
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setWebSearchResults(null);
-    resetAdjustments();
-    setZoom(1);
-
+    setBwImages(null);
+    setArtImages(null);
+    setPhotoShootImages(null);
+    setArtMovementImages(null);
+    setVirtualTrialImages(null);
     try {
-      const results = await generateImagesFromText(prompt);
-      if (results && results.length > 0) {
-        setGeneratedImages(results);
-      } else {
-        throw new Error("Could not generate images from the prompt.");
-      }
+        const images = await generateImagesFromText(prompt);
+        setGeneratedImages(images);
     } catch (error: any) {
         console.error("Error generating images:", error);
         if (error.message?.includes("Requested entity was not found.")) {
@@ -473,39 +452,23 @@ const App: React.FC = () => {
             alert("An error occurred while generating images. Please try again.");
         }
     } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
+        setIsLoading(false);
+        setLoadingMessage('');
     }
   };
-  
+
   const handleWebSearch = async () => {
     if (!processedImage || !imageFile) return;
-
     setIsLoading(true);
-    setLoadingMessage("Searching the web for similar images...");
+    setLoadingMessage("Searching the web...");
     setActiveTool('web-search');
-
-    // Clear previous results/special views
-    setGeneratedVideoUrl(null);
-    setCartoonImages(null);
-    setGeneratedImages(null);
-    setThreeDImages(null);
-    setDollImages(null);
-    setWebSearchResults(null);
-
     try {
         const imageToSend = await getAdjustedImage();
         const results = await searchWebForSimilarImages(imageToSend, imageFile.type);
-        if (results && results.links.length > 0) {
-            setWebSearchResults(results);
-        } else {
-            alert("Could not find any similar images on the web.");
-            setActiveTool(null); // Reset tool if no results
-        }
+        setWebSearchResults(results);
     } catch (error) {
-        console.error("Error searching for web images:", error);
-        alert("An error occurred while searching the web. Please try again.");
-        setActiveTool(null); // Reset tool on error
+        console.error("Error searching web:", error);
+        alert("An error occurred during the web search.");
     } finally {
         setIsLoading(false);
         setLoadingMessage('');
@@ -513,323 +476,208 @@ const App: React.FC = () => {
   };
 
   const handleCropConfirm = async () => {
-    if (imgRef.current && crop?.width && crop?.height) {
-        const imageToCrop = await getAdjustedImage();
-        
-        const tempImg = new window.Image();
-        await new Promise(resolve => {
-            tempImg.onload = resolve;
-            tempImg.src = imageToCrop;
-        });
-
-        const croppedImageBase64 = await cropImage(tempImg, crop, zoom);
-        if (croppedImageBase64) {
-            updateProcessedImage(croppedImageBase64);
+    if (crop && imgRef.current) {
+        const croppedImage = await cropImage(imgRef.current, crop, zoom);
+        if (croppedImage) {
+            updateProcessedImage(croppedImage);
         }
     }
     setActiveTool(null);
     setCrop(undefined);
-    setBeforeImage(null);
   };
 
   const handleResize = async (width: number, height: number) => {
     if (!processedImage) return;
     setIsLoading(true);
-    setLoadingMessage(`Resizing image to ${width}x${height}...`);
+    setLoadingMessage("Resizing image...");
     try {
-        const imageToResize = await getAdjustedImage();
-        const resizedImage = await resizeImage(imageToResize, width, height);
-        updateProcessedImage(resizedImage, true);
+        const resized = await resizeImage(processedImage, width, height);
+        updateProcessedImage(resized);
     } catch (error) {
         console.error("Error resizing image:", error);
-        alert("An error occurred while resizing the image.");
+        alert("Could not resize the image.");
     } finally {
         setIsLoading(false);
         setLoadingMessage('');
     }
   };
 
+  const handleApplyInpainting = async (prompt: string, message: string) => {
+    if (!imageFile || !maskCanvasRef.current) return;
+    const mask = maskCanvasRef.current.toDataURL('image/png');
+
+    setIsLoading(true);
+    setLoadingMessage(message);
+    try {
+        const imageToSend = await getAdjustedImage();
+        const result = await processInpaintingWithGemini(prompt, imageToSend, imageFile.type, mask);
+        if (result) {
+            updateProcessedImage(result, true);
+        }
+    } catch (error) {
+        console.error("Error with inpainting:", error);
+        alert("An error occurred during the operation. Please try again.");
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+        setActiveTool(null);
+    }
+  };
+
+  const handleApplyRemove = () => handleApplyInpainting("Remove the area marked in red from the image. Fill the space realistically.", "Removing object...");
+  const handleApplyBlur = () => handleApplyInpainting("Apply a realistic background blur (bokeh) to this image. The area marked in white should remain in sharp focus. Everything else should be blurred.", "Applying background blur...");
+  const handleApplyColorChange = () => {
+      if (!colorChangePrompt.trim()) {
+          alert('Please describe the new color.');
+          return;
+      }
+      const prompt = `Change the color of the area marked in white to '${colorChangePrompt}'. The change should be realistic and preserve textures.`;
+      handleApplyInpainting(prompt, "Changing color...");
+  };
+
   const handleClearMask = () => {
-    if (maskCanvasRef.current) {
-     const canvas = maskCanvasRef.current;
-     const ctx = canvas.getContext('2d');
-     ctx?.clearRect(0, 0, canvas.width, canvas.height);
-   }
-  };
-
-  const handleApplyRemove = async () => {
-    if (!processedImage || !imageFile || !maskCanvasRef.current) return;
-  
-    const maskCanvas = maskCanvasRef.current;
-    const isMaskEmpty = !maskCanvas.getContext('2d')?.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data.some(channel => channel !== 0);
-    
-    if(isMaskEmpty) {
-      alert("Please mark the object you want to remove in red before applying.");
-      return;
-    }
-  
-    const maskBase64 = maskCanvas.toDataURL('image/png');
-    
-    setIsLoading(true);
-    setLoadingMessage("Removing object...");
-    setActiveTool('remove');
-  
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt = "In the first image, remove the object that is highlighted in red in the second image (the mask). Fill the area where the object was with a realistic background that matches the surrounding context. Provide only the modified image as output.";
-      const result = await processInpaintingWithGemini(prompt, imageToSend, imageFile.type, maskBase64);
-      if (result) {
-        updateProcessedImage(result);
+      if (maskCanvasRef.current) {
+          const ctx = maskCanvasRef.current.getContext('2d');
+          ctx?.clearRect(0, 0, maskCanvasRef.current.width, maskCanvasRef.current.height);
       }
-    } catch (error) {
-      console.error("Error removing object:", error);
-      alert("An error occurred while removing the object. Please try again.");
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-      setActiveTool(null);
-      handleClearMask();
-    }
   };
 
-  const handleBlurBackground = async () => {
-    if (!processedImage || !imageFile || !maskCanvasRef.current) return;
-
-    const maskCanvas = maskCanvasRef.current;
-    const isMaskEmpty = !maskCanvas.getContext('2d')?.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data.some(channel => channel !== 0);
-    
-    if(isMaskEmpty) {
-      alert("Please mark the object you want to keep in focus before applying.");
-      return;
-    }
-  
-    const maskBase64 = maskCanvas.toDataURL('image/png');
-    
-    setIsLoading(true);
-    setLoadingMessage("Applying background blur...");
-    setActiveTool('background-blur');
-
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt = "Using the second image (the mask), apply a realistic background blur (bokeh effect) to the first image. The area marked in white on the mask should remain sharp and in focus. The rest of the image should be blurred. Provide only the modified image as output.";
-      const result = await processInpaintingWithGemini(prompt, imageToSend, imageFile.type, maskBase64);
-      if (result) {
-        updateProcessedImage(result);
+  const handleDownload = (format: 'jpeg' | 'png' | 'webp') => {
+      if (processedImage && imageFile) {
+          downloadImage(processedImage, format, imageFile.name);
       }
-    } catch (error) {
-      console.error("Error blurring background:", error);
-      alert("An error occurred while applying the background blur. Please try again.");
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-      setActiveTool(null);
-      handleClearMask();
-    }
   };
 
-  const handleApplyColorChange = async () => {
-    if (!processedImage || !imageFile || !maskCanvasRef.current) return;
-  
-    if (!colorChangePrompt.trim()) {
-      alert("Please describe the color you want to apply.");
-      return;
-    }
-  
-    const maskCanvas = maskCanvasRef.current;
-    const isMaskEmpty = !maskCanvas.getContext('2d')?.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data.some(channel => channel !== 0);
-    
-    if(isMaskEmpty) {
-      alert("Please mark the area you want to recolor before applying.");
-      return;
-    }
-  
-    const maskBase64 = maskCanvas.toDataURL('image/png');
-    
-    setIsLoading(true);
-    setLoadingMessage(`Changing color to ${colorChangePrompt}...`);
-    setActiveTool('change-color');
-  
-    try {
-      const imageToSend = await getAdjustedImage();
-      const prompt = `Using the second image as a mask, change the color of the area marked in white on the mask in the first image to '${colorChangePrompt}'. Preserve all textures, shadows, and details. Only change the color.`;
-      const result = await processInpaintingWithGemini(prompt, imageToSend, imageFile.type, maskBase64);
-      if (result) {
-        updateProcessedImage(result);
+  const createDownloadHandler = (name: string) => (base64: string, format: 'jpeg' | 'png' | 'webp') => {
+      if (imageFile) {
+          const fileName = imageFile.name.substring(0, imageFile.name.lastIndexOf('.')) || imageFile.name;
+          downloadImage(base64, format, `${fileName}-${name}`);
       }
-    } catch (error) {
-      console.error("Error changing color:", error);
-      alert("An error occurred while changing the color. Please try again.");
-    } finally {
-      setIsLoading(false);
-      setLoadingMessage('');
-      setActiveTool(null);
-      handleClearMask();
-      setColorChangePrompt('');
-    }
   };
   
-  const handleDownload = async (format: 'jpeg' | 'png' | 'webp') => {
-    if (processedImage) {
-        const imageToDownload = await getAdjustedImage();
-        downloadImage(imageToDownload, format, imageFile?.name || 'edited-photo');
-    }
-  };
+  const handleDownloadGeneratedImage = createDownloadHandler('generated');
+  const handleDownloadCartoon = createDownloadHandler('cartoon');
+  const handleDownloadThreeDImage = createDownloadHandler('3d');
+  const handleDownloadDollImage = createDownloadHandler('doll');
+  const handleDownloadBwImage = createDownloadHandler('bw');
+  const handleDownloadArtImage = createDownloadHandler('art');
+  const handleDownloadPhotoShootImage = createDownloadHandler('photoshoot');
+  const handleDownloadArtMovementImage = createDownloadHandler('art-movement');
+  const handleDownloadVirtualTrialImage = createDownloadHandler('hairstyle');
 
-  const handleDownloadCartoon = (base64: string, format: 'jpeg' | 'png' | 'webp') => {
-    downloadImage(base64, format, imageFile?.name || 'cartoon-photo');
-  };
-
-  const handleDownloadThreeDImage = (base64: string, format: 'jpeg' | 'png' | 'webp') => {
-    downloadImage(base64, format, imageFile?.name || '3d-drawing');
-  };
-
-  const handleDownloadDollImage = (base64: string, format: 'jpeg' | 'png' | 'webp') => {
-    downloadImage(base64, format, imageFile?.name || 'doll-style');
-  };
-
-  const handleDownloadGeneratedImage = (base64: string, format: 'jpeg' | 'png' | 'webp') => {
-    downloadImage(base64, format, 'generated-image');
-  };
-
-  if (!imageFile && !generatedImages) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center relative overflow-hidden">
-        {graffitiFeatures}
-        <Header />
-        <ImageUploader onImageUpload={handleImageUpload} />
-      </div>
-    );
-  }
+  const handleZoomIn = () => setZoom(z => Math.min(z + 0.1, 3));
+  const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.2));
+  const onResetZoom = () => setZoom(1);
 
   return (
-    <div className="min-h-screen bg-gray-800 flex flex-col">
+    <div className="flex flex-col h-screen bg-gray-900 text-white">
       <Header />
-      {isLoading && (
-        <div className="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50">
-          <Dna className="w-16 h-16 text-blue-400 animate-spin" />
-          <p className="mt-4 text-lg font-semibold text-white">{loadingMessage}</p>
+      {!imageFile ? (
+        <div className="flex-grow flex flex-col relative overflow-hidden">
+            {graffitiFeatures}
+            <ImageUploader onImageUpload={handleImageUpload} />
         </div>
+      ) : (
+        <EditorLayout>
+          <ControlPanel
+            imageFile={imageFile}
+            onAutoAdjust={handleAutoAdjust}
+            onRestore={handleRestore}
+            onColorize={handleColorize}
+            onExpand={handleExpand}
+            onRemoveBackground={handleRemoveBackground}
+            onPortraitRetouch={handlePortraitRetouch}
+            onContextualText={handleContextualText}
+            contextualTextPrompt={contextualTextPrompt}
+            setContextualTextPrompt={setContextualTextPrompt}
+            onCartoonify={handleCartoonify}
+            onGenerateBwStyles={handleBlackAndWhiteStyles}
+            on3dDrawing={handle3dDrawing}
+            onDollify={handleDollify}
+            onGenerateImages={handleGenerateImages}
+            onWebSearch={handleWebSearch}
+            onAnimate={handleAnimateImage}
+            isApiKeySelected={isApiKeySelected}
+            setIsApiKeySelected={setIsApiKeySelected}
+            onGenerateArtStyles={handleGenerateArtStyles}
+            onArtMovements={handleArtMovements}
+            onHoldMyDoll={handleHoldMyDoll}
+            onPhotoShoot={handlePhotoShoot}
+            onVirtualTrial={handleVirtualTrial}
+            onCrop={() => setActiveTool('crop')}
+            onCropConfirm={handleCropConfirm}
+            onResize={handleResize}
+            currentDimensions={imageDimensions}
+            onRemoveObject={() => setActiveTool('remove')}
+            onApplyRemove={handleApplyRemove}
+            onBlurBackground={() => setActiveTool('background-blur')}
+            onApplyBlur={handleApplyBlur}
+            onChangeColor={() => setActiveTool('change-color')}
+            onApplyColorChange={handleApplyColorChange}
+            colorChangePrompt={colorChangePrompt}
+            setColorChangePrompt={setColorChangePrompt}
+            onClearMask={handleClearMask}
+            onDownload={handleDownload}
+            onUndo={handleUndo}
+            onUploadNew={handleNewFileUpload}
+            isUndoDisabled={history.length <= 1}
+            activeTool={activeTool}
+            isImageLoaded={!!processedImage}
+            isEditingMode={activeTool !== 'generate'}
+            brightness={brightness}
+            setBrightness={setBrightness}
+            contrast={contrast}
+            setContrast={setContrast}
+            angle={angle}
+            setAngle={setAngle}
+            gamma={gamma}
+            setGamma={setGamma}
+            sharpness={sharpness}
+            setSharpness={setSharpness}
+            onResetAdjustments={resetAdjustments}
+            zoom={zoom}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetZoom={onResetZoom}
+          />
+          <ImageViewer
+            processedImage={processedImage}
+            generatedVideoUrl={generatedVideoUrl}
+            cartoonImages={cartoonImages}
+            generatedImages={generatedImages}
+            threeDImages={threeDImages}
+            dollImages={dollImages}
+            bwImages={bwImages}
+            artImages={artImages}
+            photoShootImages={photoShootImages}
+            artMovementImages={artMovementImages}
+            virtualTrialImages={virtualTrialImages}
+            webSearchResults={webSearchResults}
+            onDownloadCartoon={handleDownloadCartoon}
+            onDownloadGeneratedImage={handleDownloadGeneratedImage}
+            onDownloadThreeDImage={handleDownloadThreeDImage}
+            onDownloadDollImage={handleDownloadDollImage}
+            onDownloadBwImage={handleDownloadBwImage}
+            onDownloadArtImage={handleDownloadArtImage}
+            onDownloadPhotoShootImage={handleDownloadPhotoShootImage}
+            onDownloadArtMovementImage={handleDownloadArtMovementImage}
+            onDownloadVirtualTrialImage={handleDownloadVirtualTrialImage}
+            activeTool={activeTool}
+            imgRef={imgRef}
+            maskCanvasRef={maskCanvasRef}
+            crop={crop}
+            setCrop={setCrop}
+            brightness={brightness}
+            contrast={contrast}
+            angle={angle}
+            gamma={gamma}
+            sharpness={sharpness}
+            zoom={zoom}
+            isLoading={isLoading}
+            loadingMessage={loadingMessage}
+          />
+        </EditorLayout>
       )}
-      <EditorLayout>
-        <ControlPanel
-          imageFile={imageFile}
-          onAutoAdjust={handleAutoAdjust}
-          onRestore={handleRestore}
-          onColorize={handleColorize}
-          onExpand={handleExpand}
-          onRemoveBackground={handleRemoveBackground}
-          onPortraitRetouch={handlePortraitRetouch}
-          onCartoonify={handleCartoonify}
-          on3dDrawing={handle3dDrawing}
-          onDollify={handleDollify}
-          onGenerateImages={handleGenerateImages}
-          onWebSearch={handleWebSearch}
-          onAnimate={handleAnimateImage}
-          isApiKeySelected={isApiKeySelected}
-          setIsApiKeySelected={setIsApiKeySelected}
-          onClassicBW={handleClassicBW}
-          onHighContrastBW={handleHighContrastBW}
-          onSepia={handleSepia}
-          onBlueTone={handleBlueTone}
-          onLomo={handleLomo}
-          onVintageFade={handleVintageFade}
-          onGoldenHour={handleGoldenHour}
-          onCyberpunk={handleCyberpunk}
-          onCrop={() => {
-            const nextTool = activeTool === 'crop' ? null : 'crop';
-            setActiveTool(nextTool);
-            setZoom(1);
-            if(nextTool === 'crop') {
-                if (angle !== 0) {
-                    alert("Rotation will be permanently applied before cropping. You can undo this change later.");
-                }
-            } else {
-                setBeforeImage(null);
-                setCrop(undefined);
-            }
-          }}
-          onCropConfirm={handleCropConfirm}
-          onResize={handleResize}
-          currentDimensions={imageDimensions}
-          onRemoveObject={() => {
-            const nextTool = activeTool === 'remove' ? null : 'remove';
-            setActiveTool(nextTool);
-            setZoom(1);
-            if (nextTool !== 'remove') {
-              handleClearMask();
-            }
-          }}
-          onApplyRemove={handleApplyRemove}
-          onBlurBackground={() => {
-            const nextTool = activeTool === 'background-blur' ? null : 'background-blur';
-            setActiveTool(nextTool);
-            setZoom(1);
-            if (nextTool !== 'background-blur') {
-              handleClearMask();
-            }
-          }}
-          onApplyBlur={handleBlurBackground}
-          onChangeColor={() => {
-            const nextTool = activeTool === 'change-color' ? null : 'change-color';
-            setActiveTool(nextTool);
-            setZoom(1);
-            if (nextTool !== 'change-color') {
-              handleClearMask();
-            }
-          }}
-          onApplyColorChange={handleApplyColorChange}
-          colorChangePrompt={colorChangePrompt}
-          setColorChangePrompt={setColorChangePrompt}
-          onClearMask={handleClearMask}
-          onDownload={handleDownload}
-          onUndo={handleUndo}
-          onUploadNew={handleNewFileUpload}
-          isUndoDisabled={history.length <= 1 && !generatedVideoUrl && !cartoonImages && !generatedImages && !dollImages}
-          activeTool={activeTool}
-          isImageLoaded={!!processedImage || !!cartoonImages || !!generatedImages}
-          isEditingMode={!!imageFile}
-          brightness={brightness}
-          setBrightness={setBrightness}
-          contrast={contrast}
-          setContrast={setContrast}
-          angle={angle}
-          setAngle={setAngle}
-          gamma={gamma}
-          setGamma={setGamma}
-          sharpness={sharpness}
-          setSharpness={setSharpness}
-          onResetAdjustments={resetAdjustments}
-          zoom={zoom}
-          onZoomIn={() => setZoom(z => Math.min(3, z + 0.1))}
-          onZoomOut={() => setZoom(z => Math.max(0.2, z - 0.1))}
-          onResetZoom={() => setZoom(1)}
-        />
-        <ImageViewer
-          beforeImage={beforeImage}
-          processedImage={processedImage}
-          generatedVideoUrl={generatedVideoUrl}
-          cartoonImages={cartoonImages}
-          generatedImages={generatedImages}
-          threeDImages={threeDImages}
-          dollImages={dollImages}
-          webSearchResults={webSearchResults}
-          onDownloadCartoon={handleDownloadCartoon}
-          onDownloadGeneratedImage={handleDownloadGeneratedImage}
-          onDownloadThreeDImage={handleDownloadThreeDImage}
-          onDownloadDollImage={handleDownloadDollImage}
-          activeTool={activeTool}
-          imgRef={imgRef}
-          maskCanvasRef={maskCanvasRef}
-          crop={crop}
-          setCrop={setCrop}
-          brightness={brightness}
-          contrast={contrast}
-          angle={angle}
-          gamma={gamma}
-          sharpness={sharpness}
-          zoom={zoom}
-        />
-      </EditorLayout>
     </div>
   );
 };

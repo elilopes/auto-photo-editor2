@@ -1,23 +1,31 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
 import type { Tool } from '../types';
-import { Image, Download, Globe, Link } from 'lucide-react';
+import { Image, Download, Globe, Link, Loader2 } from 'lucide-react';
 
 
 interface ImageViewerProps {
-  beforeImage: string | null;
   processedImage: string | null;
   generatedVideoUrl: string | null;
   cartoonImages: string[] | null;
   generatedImages: string[] | null;
   threeDImages: string[] | null;
   dollImages: string[] | null;
+  bwImages: string[] | null;
+  artImages: string[] | null;
+  photoShootImages: string[] | null;
+  artMovementImages: string[] | null;
+  virtualTrialImages: string[] | null;
   webSearchResults: { summary: string; links: { uri: string; title: string }[] } | null;
   onDownloadCartoon: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadGeneratedImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadThreeDImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadDollImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadBwImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadArtImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadPhotoShootImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadArtMovementImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadVirtualTrialImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   activeTool: Tool | null;
   imgRef: React.RefObject<HTMLImageElement>;
   maskCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -29,91 +37,17 @@ interface ImageViewerProps {
   gamma: number; // For passing to styles, though not directly used in CSS
   sharpness: number;
   zoom: number;
+  isLoading: boolean;
+  loadingMessage: string;
 }
 
-const BeforeAfterSlider: React.FC<{ before: string, after: string }> = ({ before, after }) => {
-    const [sliderPos, setSliderPos] = useState(50);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const isDragging = useRef(false);
-
-    const handleMove = useCallback((clientX: number) => {
-        if (!containerRef.current) return;
-        const rect = containerRef.current.getBoundingClientRect();
-        if (rect.width <= 0) return; // Guard against division by zero
-
-        const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
-        const percent = (x / rect.width) * 100;
-        setSliderPos(percent);
-    }, []);
-    
-    const onMouseMove = useCallback((event: MouseEvent) => {
-        if (!isDragging.current) return;
-        event.preventDefault();
-        handleMove(event.clientX);
-    }, [handleMove]);
-
-    const onTouchMove = useCallback((event: TouchEvent) => {
-        if (!isDragging.current) return;
-        // prevent scrolling
-        event.preventDefault();
-        handleMove(event.touches[0].clientX);
-    }, [handleMove]);
-
-    const onDragEnd = useCallback(() => {
-        isDragging.current = false;
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', onDragEnd);
-        window.removeEventListener('touchmove', onTouchMove);
-        window.removeEventListener('touchend', onDragEnd);
-    }, [onMouseMove, onTouchMove]);
-    
-    const onDragStart = useCallback((event: React.MouseEvent | React.TouchEvent) => {
-        event.preventDefault();
-        isDragging.current = true;
-        
-        const clientX = 'touches' in event.nativeEvent ? (event.nativeEvent as TouchEvent).touches[0].clientX : (event.nativeEvent as MouseEvent).clientX;
-        handleMove(clientX);
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onDragEnd);
-        window.addEventListener('touchmove', onTouchMove);
-        window.addEventListener('touchend', onDragEnd);
-    }, [handleMove, onMouseMove, onTouchMove, onDragEnd]);
-
-    useEffect(() => {
-        // Cleanup listeners when component unmounts
-        return () => {
-            onDragEnd();
-        };
-    }, [onDragEnd]);
-
-    return (
-        <div 
-            ref={containerRef} 
-            className="relative w-full h-full select-none cursor-ew-resize"
-            onMouseDown={onDragStart}
-            onTouchStart={onDragStart}
-        >
-            <img src={before} alt="Before" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
-            <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none" style={{ clipPath: `inset(0 ${100 - sliderPos}% 0 0)` }}>
-                <img src={after} alt="After" className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
-            </div>
-            
-            {/* Visual handle line */}
-            <div 
-                className="absolute inset-y-0 w-1 bg-white bg-opacity-80 pointer-events-none" 
-                style={{ left: `${sliderPos}%`, transform: 'translateX(-50%)' }}
-            />
-            {/* Visual handle circle */}
-            <div
-                className="absolute top-1/2 w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center shadow-2xl pointer-events-none"
-                style={{ left: `${sliderPos}%`, transform: 'translate(-50%, -50%)' }}
-            >
-                <svg className="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 9l4-4 4 4m0 6l-4 4-4-4"></path></svg>
-            </div>
-        </div>
-    );
-};
+const LoadingIndicator: React.FC<{ message: string }> = ({ message }) => (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-75 backdrop-blur-sm rounded-xl">
+        <Loader2 className="w-16 h-16 text-blue-400 animate-spin" />
+        <h2 className="mt-6 text-2xl font-bold text-white">Please wait...</h2>
+        {message && <p className="mt-2 text-lg text-gray-300">{message}</p>}
+    </div>
+);
 
 const GeneratedImageOption: React.FC<{
     image: string;
@@ -203,6 +137,261 @@ const CartoonViewer: React.FC<{
           <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
               {images.map((img, index) => (
                   <CartoonOption
+                      key={index}
+                      image={img}
+                      title={titles[index]}
+                      onDownload={(format) => onDownload(img, format)}
+                  />
+              ))}
+          </div>
+      );
+};
+
+const BwOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Style</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+
+const BwViewer: React.FC<{
+    images: string[];
+    onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+    const titles = ["Classic", "High Contrast", "Soft Vintage", "Film Noir"];
+    return (
+        <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+            {images.map((img, index) => (
+                <BwOption
+                    key={index}
+                    image={img}
+                    title={titles[index]}
+                    onDownload={(format) => onDownload(img, format)}
+                />
+            ))}
+        </div>
+    );
+};
+
+const ArtOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Style</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+  
+const ArtViewer: React.FC<{
+      images: string[];
+      onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+      const titles = ["Film Noir", "Soft Focus", "Vintage Sepia", "Grainy Film"];
+      return (
+          <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+              {images.map((img, index) => (
+                  <ArtOption
+                      key={index}
+                      image={img}
+                      title={titles[index]}
+                      onDownload={(format) => onDownload(img, format)}
+                  />
+              ))}
+          </div>
+      );
+};
+
+const PhotoShootOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Photo</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+  
+const PhotoShootViewer: React.FC<{
+      images: string[];
+      onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+      const titles = ["Urban Alley", "Parisian Café", "Sunset Beach", "Modern Office"];
+      return (
+          <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+              {images.map((img, index) => (
+                  <PhotoShootOption
+                      key={index}
+                      image={img}
+                      title={titles[index]}
+                      onDownload={(format) => onDownload(img, format)}
+                  />
+              ))}
+          </div>
+      );
+};
+
+const ArtMovementOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Style</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+  
+const ArtMovementViewer: React.FC<{
+      images: string[];
+      onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+      const titles = ["Impressionism", "Cubism", "Surrealism", "Baroque"];
+      return (
+          <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+              {images.map((img, index) => (
+                  <ArtMovementOption
+                      key={index}
+                      image={img}
+                      title={titles[index]}
+                      onDownload={(format) => onDownload(img, format)}
+                  />
+              ))}
+          </div>
+      );
+};
+
+const VirtualTrialOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Hairstyle</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+  
+const VirtualTrialViewer: React.FC<{
+      images: string[];
+      onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+      const titles = ["Chin-Length Bob", "Beach Curls", "Pixie Cut", "Braided Updo"];
+      return (
+          <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+              {images.map((img, index) => (
+                  <VirtualTrialOption
                       key={index}
                       image={img}
                       title={titles[index]}
@@ -367,7 +556,7 @@ const WebSearchResultsViewer: React.FC<{
 };
 
 
-export const ImageViewer: React.FC<ImageViewerProps> = ({ beforeImage, processedImage, generatedVideoUrl, cartoonImages, generatedImages, threeDImages, dollImages, webSearchResults, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom }) => {
+export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, generatedVideoUrl, cartoonImages, generatedImages, threeDImages, dollImages, bwImages, artImages, photoShootImages, artMovementImages, virtualTrialImages, webSearchResults, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, onDownloadBwImage, onDownloadArtImage, onDownloadPhotoShootImage, onDownloadArtMovementImage, onDownloadVirtualTrialImage, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom, isLoading, loadingMessage }) => {
     const [isDrawing, setIsDrawing] = useState(false);
     const drawingWrapperRef = useRef<HTMLDivElement>(null);
     const viewerContainerRef = useRef<HTMLDivElement>(null);
@@ -566,6 +755,26 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ beforeImage, processed
         if (activeTool === 'cartoonify' && cartoonImages?.length) {
             return <CartoonViewer images={cartoonImages} onDownload={onDownloadCartoon} />;
         }
+        
+        if (activeTool === 'art-effects' && artImages?.length) {
+            return <ArtViewer images={artImages} onDownload={onDownloadArtImage} />;
+        }
+
+        if (activeTool === 'photo-shoot' && photoShootImages?.length) {
+            return <PhotoShootViewer images={photoShootImages} onDownload={onDownloadPhotoShootImage} />;
+        }
+
+        if (activeTool === 'art-movements' && artMovementImages?.length) {
+            return <ArtMovementViewer images={artMovementImages} onDownload={onDownloadArtMovementImage} />;
+        }
+
+        if (activeTool === 'virtual-trial' && virtualTrialImages?.length) {
+            return <VirtualTrialViewer images={virtualTrialImages} onDownload={onDownloadVirtualTrialImage} />;
+        }
+
+        if (activeTool === 'black-and-white' && bwImages?.length) {
+            return <BwViewer images={bwImages} onDownload={onDownloadBwImage} />;
+        }
 
         if (activeTool === '3d-drawing' && threeDImages?.length) {
             return <ThreeDViewer images={threeDImages} onDownload={onDownloadThreeDImage} />;
@@ -584,10 +793,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ beforeImage, processed
             )
         }
         
-        if ((activeTool === 'colorize' || activeTool === 'auto-adjust' || activeTool === 'restore') && beforeImage && processedImage) {
-            return <div style={imageStyles}><BeforeAfterSlider before={beforeImage} after={processedImage} /></div>;
-        }
-
         if (activeTool === 'crop') {
             return (
                 <ReactCrop crop={crop} onChange={c => setCrop(c)}>
@@ -624,7 +829,8 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ beforeImage, processed
     };
 
     return (
-        <div className="lg:col-span-9 bg-black rounded-xl flex items-center justify-center p-4 overflow-hidden h-[85vh]">
+        <div className="relative lg:col-span-9 bg-black rounded-xl flex items-center justify-center p-4 overflow-hidden h-[85vh]">
+            {isLoading && <LoadingIndicator message={loadingMessage} />}
             <svg style={{ position: 'absolute', height: 0, width: 0 }}>
                 <defs>
                     <filter id="sharpness-filter">
