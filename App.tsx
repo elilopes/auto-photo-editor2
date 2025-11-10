@@ -1,18 +1,20 @@
-
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type { Crop } from 'react-image-crop';
 import { Header } from './components/Header';
-import { ImageUploader } from './components/ImageUploader';
+import { InitialScreen } from './components/InitialScreen';
 import { EditorLayout } from './components/EditorLayout';
 import { ControlPanel } from './components/ControlPanel';
-import { ImageViewer } from './components/ImageViewer';
-import { processImageWithGemini, convertGifToMp4, processInpaintingWithGemini, generateImagesFromText, searchWebForSimilarImages, performVirtualTryOn } from './services/geminiService';
-import { applyAdjustments, cropImage, downloadImage, fileToBase64, resizeImage } from './utils/imageUtils';
-import type { Tool, ImageFile } from './types';
+import { MediaViewer } from './components/ImageViewer';
+import { processImageWithGemini, convertGifToMp4, processInpaintingWithGemini, generateImagesFromText, searchWebForSimilarImages, performVirtualTryOn, compressVideoWithGemini, vectorizeImage, generateVideoFromText } from './services/geminiService';
+import { applyAdjustments, cropImage, downloadImage, fileToBase64, resizeImage, downloadVideo } from './utils/imageUtils';
+import type { Tool, ImageFile, VideoFile, VideoInfo } from './types';
 
 const App: React.FC = () => {
   const [imageFile, setImageFile] = useState<ImageFile | null>(null);
+  const [videoFile, setVideoFile] = useState<VideoFile | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
+  const [processedVideoUrl, setProcessedVideoUrl] = useState<string | null>(null);
+  const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null);
   const [generatedMp4Url, setGeneratedMp4Url] = useState<string | null>(null);
   const [cartoonImages, setCartoonImages] = useState<string[] | null>(null);
   const [generatedImages, setGeneratedImages] = useState<string[] | null>(null);
@@ -23,8 +25,11 @@ const App: React.FC = () => {
   const [photoShootImages, setPhotoShootImages] = useState<string[] | null>(null);
   const [artMovementImages, setArtMovementImages] = useState<string[] | null>(null);
   const [hairstyleImages, setHairstyleImages] = useState<string[] | null>(null);
+  const [ageChangeImages, setAgeChangeImages] = useState<string[] | null>(null);
   const [virtualTryOnImage, setVirtualTryOnImage] = useState<string | null>(null);
   const [webSearchResults, setWebSearchResults] = useState<{ summary: string; links: { uri: string; title: string }[] } | null>(null);
+  const [faviconImages, setFaviconImages] = useState<string[] | null>(null);
+  const [vectorizedSvg, setVectorizedSvg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [activeTool, setActiveTool] = useState<Tool | null>(null);
@@ -48,7 +53,8 @@ const App: React.FC = () => {
         'Restore', 'Colorize', 'Resize', 'Crop', 'GIF to MP4', 'Remove Background', 
         'Cartoonify', '3D Drawing', 'Expand', 'Portrait Retouch', 'Web Search', 
         'Adjustments', 'Art Effects', 'Generate', 'Remove Object', 'Blur Background', 
-        'Change Color', 'Virtual Try-On', 'Hairstyle Trial'
+        'Change Color', 'Virtual Try-On', 'Hairstyle Trial', 'Change Age', 'Compact Video',
+        'Favicon', 'Vectorize'
     ];
     const colors = ['#f94144', '#f3722c', '#f8961e', '#f9c74f', '#90be6d', '#43aa8b', '#577590', '#6a4c93'];
 
@@ -130,8 +136,12 @@ const App: React.FC = () => {
     setPhotoShootImages(null);
     setArtMovementImages(null);
     setHairstyleImages(null);
+    setAgeChangeImages(null);
     setVirtualTryOnImage(null);
     setWebSearchResults(null);
+    setProcessedVideoUrl(null);
+    setFaviconImages(null);
+    setVectorizedSvg(null);
   };
   
   const updateProcessedImage = (newImage: string, keepAdjustments = false) => {
@@ -143,24 +153,30 @@ const App: React.FC = () => {
     }
   }
 
-  const handleImageUpload = (file: ImageFile) => {
-    setImageFile(file);
+  const handleFileUpload = async (file: File) => {
+    if (file.type.startsWith('image/')) {
+        const base64 = await fileToBase64(file);
+        setImageFile({ name: file.name, type: file.type, base64, size: file.size });
+        setVideoFile(null); // Switch to image mode
+    } else if (file.type.startsWith('video/')) {
+        const url = URL.createObjectURL(file);
+        setVideoFile({ name: file.name, type: file.type, url, file, size: file.size });
+        setImageFile(null); // Switch to video mode
+    } else {
+        alert('Please upload a valid image or video file.');
+        return;
+    }
     setActiveTool(null);
     setCrop(undefined);
     resetAllViews();
     setZoom(1);
-  };
+};
+
 
   const handleNewFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (files && files[0]) {
-      const file = files[0];
-      if (file.type.startsWith('image/')) {
-        const base64 = await fileToBase64(file);
-        handleImageUpload({ name: file.name, type: file.type, base64, size: file.size });
-      } else {
-        alert('Please upload a valid image file (JPEG, PNG, WEBP, GIF).');
-      }
+        await handleFileUpload(files[0]);
     }
     if (event.target) {
         event.target.value = '';
@@ -270,6 +286,50 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCompactVideo = async (quality: 'high' | 'medium' | 'low') => {
+    if (!videoFile || !videoInfo) {
+      alert("Video metadata has not loaded yet. Please wait a moment and try again.");
+      return;
+    }
+
+    const messages = {
+        high: 'Compressing video (High Quality)...',
+        medium: 'Compressing video (Good Quality)...',
+        low: 'Compressing video (Smallest File)...'
+    };
+
+    setIsLoading(true);
+    setLoadingMessage(`${messages[quality]} This may take several minutes.`);
+    setActiveTool('compact-video');
+    resetAllViews();
+
+    try {
+        const resultUrl = await compressVideoWithGemini(videoFile.file, quality, videoInfo);
+        if (resultUrl) {
+            setProcessedVideoUrl(resultUrl);
+        } else {
+            throw new Error("Video processing returned no result.");
+        }
+    } catch (error: any) {
+        console.error("Error compacting video:", error);
+        if (error.message?.includes("Requested entity was not found.")) {
+            alert("Your API key is invalid. Please select a valid key and try again.");
+            setIsApiKeySelected(false);
+        } else {
+            alert("An error occurred while compacting the video. Please try again.");
+        }
+        // Reset view on error
+        setActiveTool(null);
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
+  };
+
+  const handleVideoMetadataLoad = (info: VideoInfo) => {
+    setVideoInfo(info);
+  };
+
   const handleAutoAdjust = () => {
     handleRequest("Automatically enhance and balance the quality, sharpness, and lighting of this old photograph. If the photograph is black and white, also colorize it with realistic colors. If it is already in color, do not change the existing colors.", "Auto-adjusting image...", 'auto-adjust');
   };
@@ -331,6 +391,14 @@ const App: React.FC = () => {
       "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but with an elegant braided updo. Ensure the person's face, features, and the background are consistently and accurately reproduced, with only the hairstyle changing. Return only the resulting image."
     ];
     handleMultipleIndividualImageRequests(prompts, "Generating hairstyle trials...", 'hairstyle-trial', setHairstyleImages);
+  };
+  
+  const handleAgeChange = () => {
+    const prompts = [
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but as a baby/toddler. Ensure the person's key facial features are recognizable but adapted to a very young age. The background should be simple and neutral. Return only the resulting image.",
+      "Analyze the main person in the provided photograph. Generate a new, photorealistic image of this exact same person but as an elderly person (around 80 years old). Add realistic signs of aging like wrinkles, graying hair, and changes in skin texture, while ensuring the person's core identity remains recognizable. The background should be simple and neutral. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Changing age...", 'change-age', setAgeChangeImages);
   };
   
   const handleVirtualTryOn = async (clothingDescription: string) => {
@@ -419,7 +487,90 @@ const App: React.FC = () => {
     ];
     handleMultipleIndividualImageRequests(prompts, "Dollifying...", 'dollify', setDollImages);
   };
+
+  const handleGenerateFavicons = () => {
+    const prompts = [
+        "Convert the main subject of this image into a simple, clear 16x16 pixel icon suitable for a website favicon. Output as a PNG with a transparent background. Return only the resulting image.",
+        "Convert the main subject of this image into a simple, clear 32x32 pixel icon suitable for a website favicon. Output as a PNG with a transparent background. Return only the resulting image.",
+        "Convert the main subject of this image into a simple, clear 48x48 pixel icon suitable for a website favicon. Output as a PNG with a transparent background. Return only the resulting image.",
+        "Convert the main subject of this image into a simple, clear 192x192 pixel icon suitable for a website favicon, for use as a web app manifest icon. Output as a PNG with a transparent background. Return only the resulting image."
+    ];
+    handleMultipleIndividualImageRequests(prompts, "Generating favicons...", 'favicon', setFaviconImages);
+  };
+
+  const handleVectorize = async () => {
+    if (!imageFile) return;
+    setIsLoading(true);
+    setLoadingMessage("Converting to vector SVG...");
+    setActiveTool('vectorize');
+    resetAllViews();
+    setProcessedImage(null); // Hide the main viewer image
+
+    try {
+        const imageToSend = await getAdjustedImage();
+        const result = await vectorizeImage(imageToSend, imageFile.type);
+        if (result) {
+            setVectorizedSvg(result);
+        } else {
+             throw new Error("Vectorization returned no result.");
+        }
+    } catch (error: any) {
+        console.error("Error vectorizing image:", error);
+        alert(error.message || "An error occurred during vectorization. Please try again.");
+        setActiveTool(null);
+        setProcessedImage(history[history.length - 1]);
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
+  };
   
+  const handleGenerateVideoFromJsonPrompt = async (prompt: string) => {
+    setIsLoading(true);
+    const waitMessage = `Please wait...
+Por favor, espere...
+Veuillez patienter...
+कृपया प्रतीक्षा करें...
+Пожалуйста, подождите...
+
+Generating video. This can take several minutes.`;
+    setLoadingMessage(waitMessage);
+    setActiveTool('json-prompt-builder');
+    resetAllViews();
+    setImageFile(null);
+    setVideoFile(null);
+
+    try {
+        const fullPrompt = `Generate a video based on the following JSON description. The 'subject' and 'setting' fields are the most important. The other fields provide guidance on the artistic direction.\n\n${prompt}`;
+        const resultUrl = await generateVideoFromText(fullPrompt);
+        if (resultUrl) {
+            setProcessedVideoUrl(resultUrl);
+            const dummyFile = new File([], "generated-video.mp4", { type: "video/mp4" });
+            setVideoFile({
+                name: "generated-video.mp4",
+                type: "video/mp4",
+                url: '', // No local blob URL
+                file: dummyFile,
+                size: 0
+            });
+        } else {
+            throw new Error("Video generation returned no result.");
+        }
+    } catch (error: any) {
+        console.error("Error generating video from JSON prompt:", error);
+        if (error.message?.includes("Requested entity was not found.")) {
+            alert("Your API key is invalid. Please select a valid key and try again.");
+            setIsApiKeySelected(false);
+        } else {
+            alert("An error occurred while generating the video. Please try again.");
+        }
+        setActiveTool(null);
+    } finally {
+        setIsLoading(false);
+        setLoadingMessage('');
+    }
+  };
+
   const handleGenerateImages = async (prompt: string) => {
     if (!prompt.trim()) return;
     setIsLoading(true);
@@ -429,7 +580,16 @@ const App: React.FC = () => {
     resetAllViews();
     try {
         const images = await generateImagesFromText(prompt);
-        setGeneratedImages(images);
+        if (images.length > 0) {
+            setGeneratedImages(images);
+            // Create a dummy image file to transition to editor view
+            setImageFile({
+                name: 'generated-image.png',
+                type: 'image/png',
+                base64: images[0],
+                size: 0
+            });
+        }
     } catch (error: any) {
         console.error("Error generating images:", error);
         if (error.message?.includes("Requested entity was not found.")) {
@@ -535,6 +695,37 @@ const App: React.FC = () => {
       }
   };
 
+  const handleVideoDownload = async () => {
+    if (processedVideoUrl && videoFile) {
+        setIsLoading(true);
+        setLoadingMessage('Downloading video...');
+        try {
+            await downloadVideo(processedVideoUrl, videoFile.name);
+        } catch (error) {
+            console.error("Download failed:", error);
+            alert("Could not download the video. Please try again.");
+        } finally {
+            setIsLoading(false);
+            setLoadingMessage('');
+        }
+    }
+  };
+
+  const handleDownloadSvg = (svgString: string) => {
+    if (imageFile) {
+        const blob = new Blob([svgString], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const fileName = imageFile.name.substring(0, imageFile.name.lastIndexOf('.')) || imageFile.name;
+        link.download = `${fileName}-vector.svg`;
+        link.href = url;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+  };
+
   const createDownloadHandler = (name: string) => (base64: string, format: 'jpeg' | 'png' | 'webp') => {
       if (imageFile) {
           const fileName = imageFile.name.substring(0, imageFile.name.lastIndexOf('.')) || imageFile.name;
@@ -551,24 +742,83 @@ const App: React.FC = () => {
   const handleDownloadPhotoShootImage = createDownloadHandler('photoshoot');
   const handleDownloadArtMovementImage = createDownloadHandler('art-movement');
   const handleDownloadHairstyleImage = createDownloadHandler('hairstyle');
+  const handleDownloadAgeChangeImage = createDownloadHandler('age-change');
   const handleDownloadVirtualTryOnImage = createDownloadHandler('virtual-try-on');
+  const handleDownloadFaviconImage = createDownloadHandler('favicon');
 
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.1, 3));
   const handleZoomOut = () => setZoom(z => Math.max(z - 0.1, 0.2));
   const onResetZoom = () => setZoom(1);
 
+  const mediaType = imageFile ? 'image' : videoFile ? 'video' : null;
+
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col min-h-screen bg-gray-900 text-white">
       <Header />
-      {!imageFile ? (
-        <div className="flex-grow flex flex-col relative overflow-hidden">
-            {graffitiFeatures}
-            <ImageUploader onImageUpload={handleImageUpload} />
-        </div>
+      {!mediaType ? (
+        <InitialScreen
+            onFileUpload={handleFileUpload}
+            onGenerateImages={handleGenerateImages}
+            onGenerateVideoFromJsonPrompt={handleGenerateVideoFromJsonPrompt}
+            isApiKeySelected={isApiKeySelected}
+            setIsApiKeySelected={setIsApiKeySelected}
+            isLoading={isLoading}
+            graffitiFeatures={graffitiFeatures}
+        />
       ) : (
         <EditorLayout>
+          <MediaViewer
+            processedImage={processedImage}
+            videoFile={videoFile}
+            processedVideoUrl={processedVideoUrl}
+            onVideoMetadataLoad={handleVideoMetadataLoad}
+            generatedMp4Url={generatedMp4Url}
+            cartoonImages={cartoonImages}
+            generatedImages={generatedImages}
+            threeDImages={threeDImages}
+            dollImages={dollImages}
+            bwImages={bwImages}
+            artImages={artImages}
+            photoShootImages={photoShootImages}
+            artMovementImages={artMovementImages}
+            hairstyleImages={hairstyleImages}
+            ageChangeImages={ageChangeImages}
+            virtualTryOnImage={virtualTryOnImage}
+            webSearchResults={webSearchResults}
+            faviconImages={faviconImages}
+            vectorizedSvg={vectorizedSvg}
+            onDownloadCartoon={handleDownloadCartoon}
+            onDownloadGeneratedImage={handleDownloadGeneratedImage}
+            onDownloadThreeDImage={handleDownloadThreeDImage}
+            onDownloadDollImage={handleDownloadDollImage}
+            onDownloadBwImage={handleDownloadBwImage}
+            onDownloadArtImage={handleDownloadArtImage}
+            onDownloadPhotoShootImage={handleDownloadPhotoShootImage}
+            onDownloadArtMovementImage={handleDownloadArtMovementImage}
+            onDownloadHairstyleImage={handleDownloadHairstyleImage}
+            onDownloadAgeChangeImage={handleDownloadAgeChangeImage}
+            onDownloadVirtualTryOnImage={handleDownloadVirtualTryOnImage}
+            onDownloadFaviconImage={handleDownloadFaviconImage}
+            onDownloadSvg={handleDownloadSvg}
+            activeTool={activeTool}
+            imgRef={imgRef}
+            maskCanvasRef={maskCanvasRef}
+            crop={crop}
+            setCrop={setCrop}
+            brightness={brightness}
+            contrast={contrast}
+            angle={angle}
+            gamma={gamma}
+            sharpness={sharpness}
+            zoom={zoom}
+            isLoading={isLoading}
+            loadingMessage={loadingMessage}
+          />
           <ControlPanel
+            mediaType={mediaType}
             imageFile={imageFile}
+            videoFile={videoFile}
+            videoInfo={videoInfo}
             onAutoAdjust={handleAutoAdjust}
             onRestore={handleRestore}
             onColorize={handleColorize}
@@ -582,9 +832,11 @@ const App: React.FC = () => {
             onGenerateBwStyles={handleBlackAndWhiteStyles}
             on3dDrawing={handle3dDrawing}
             onDollify={handleDollify}
-            onGenerateImages={handleGenerateImages}
+            onGenerateFavicons={handleGenerateFavicons}
+            onVectorize={handleVectorize}
             onWebSearch={handleWebSearch}
             onGifToMp4={handleGifToMp4}
+            onCompactVideo={handleCompactVideo}
             isApiKeySelected={isApiKeySelected}
             setIsApiKeySelected={setIsApiKeySelected}
             onGenerateArtStyles={handleGenerateArtStyles}
@@ -592,6 +844,7 @@ const App: React.FC = () => {
             onHoldMyDoll={handleHoldMyDoll}
             onPhotoShoot={handlePhotoShoot}
             onHairstyleTrial={handleHairstyleTrial}
+            onAgeChange={handleAgeChange}
             onVirtualTryOn={handleVirtualTryOn}
             onCrop={() => setActiveTool('crop')}
             onCropConfirm={handleCropConfirm}
@@ -607,12 +860,15 @@ const App: React.FC = () => {
             setColorChangePrompt={setColorChangePrompt}
             onClearMask={handleClearMask}
             onDownload={handleDownload}
+            onVideoDownload={handleVideoDownload}
             onUndo={handleUndo}
             onUploadNew={handleNewFileUpload}
             isUndoDisabled={history.length <= 1}
             activeTool={activeTool}
-            isImageLoaded={!!processedImage}
-            isEditingMode={activeTool !== 'generate'}
+            isMediaLoaded={!!processedImage || !!videoFile}
+            isEditingMode={activeTool !== 'generate' && !videoFile}
+            isProcessedVideoReady={!!processedVideoUrl}
+            isLoading={isLoading}
             brightness={brightness}
             setBrightness={setBrightness}
             contrast={contrast}
@@ -628,44 +884,6 @@ const App: React.FC = () => {
             onZoomIn={handleZoomIn}
             onZoomOut={handleZoomOut}
             onResetZoom={onResetZoom}
-          />
-          <ImageViewer
-            processedImage={processedImage}
-            generatedMp4Url={generatedMp4Url}
-            cartoonImages={cartoonImages}
-            generatedImages={generatedImages}
-            threeDImages={threeDImages}
-            dollImages={dollImages}
-            bwImages={bwImages}
-            artImages={artImages}
-            photoShootImages={photoShootImages}
-            artMovementImages={artMovementImages}
-            hairstyleImages={hairstyleImages}
-            virtualTryOnImage={virtualTryOnImage}
-            webSearchResults={webSearchResults}
-            onDownloadCartoon={handleDownloadCartoon}
-            onDownloadGeneratedImage={handleDownloadGeneratedImage}
-            onDownloadThreeDImage={handleDownloadThreeDImage}
-            onDownloadDollImage={handleDownloadDollImage}
-            onDownloadBwImage={handleDownloadBwImage}
-            onDownloadArtImage={handleDownloadArtImage}
-            onDownloadPhotoShootImage={handleDownloadPhotoShootImage}
-            onDownloadArtMovementImage={handleDownloadArtMovementImage}
-            onDownloadHairstyleImage={handleDownloadHairstyleImage}
-            onDownloadVirtualTryOnImage={handleDownloadVirtualTryOnImage}
-            activeTool={activeTool}
-            imgRef={imgRef}
-            maskCanvasRef={maskCanvasRef}
-            crop={crop}
-            setCrop={setCrop}
-            brightness={brightness}
-            contrast={contrast}
-            angle={angle}
-            gamma={gamma}
-            sharpness={sharpness}
-            zoom={zoom}
-            isLoading={isLoading}
-            loadingMessage={loadingMessage}
           />
         </EditorLayout>
       )}

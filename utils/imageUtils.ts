@@ -182,3 +182,58 @@ export const downloadImage = (base64: string, format: 'jpeg' | 'png' | 'webp', o
 
     img.src = base64;
 };
+
+export const downloadVideo = async (url: string, originalName: string) => {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch video: ${response.statusText}`);
+    }
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    const fileName = originalName.substring(0, originalName.lastIndexOf('.')) || originalName;
+    link.download = `${fileName}-compressed.mp4`;
+    link.href = blobUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+};
+
+export const extractVideoFrame = (videoFile: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        if (!ctx) {
+            return reject(new Error('Could not get canvas context'));
+        }
+
+        const url = URL.createObjectURL(videoFile);
+        video.src = url;
+        video.muted = true;
+        video.play().catch(() => {});
+
+        video.onloadedmetadata = () => {
+            video.currentTime = video.duration / 2; // Seek to the middle
+        };
+
+        video.onseeked = () => {
+            video.pause();
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, video.videoWidth, video.videoHeight);
+            const frameDataUrl = canvas.toDataURL('image/png');
+            URL.revokeObjectURL(url);
+            resolve(frameDataUrl);
+        };
+
+        video.onerror = (e) => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Failed to load video for frame extraction.'));
+        };
+    });
+};

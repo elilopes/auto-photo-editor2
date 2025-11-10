@@ -1,10 +1,12 @@
-
 import React, { useState, useEffect } from 'react';
-import type { Tool, ImageFile } from '../types';
-import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, FileVideo, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info, Shirt, Camera, GalleryThumbnails, Scissors, Pilcrow } from 'lucide-react';
+import type { Tool, ImageFile, VideoFile, VideoInfo } from '../types';
+import { Sparkles, Wand2, Palette, Crop as CropIcon, Expand, Download, Undo, Check, FileVideo, KeyRound, Upload, Brush, Trash2, Layers, SlidersHorizontal, RefreshCcw, ChevronDown, Smile, Droplets, UserCheck, BrainCircuit, Box, SmilePlus, Eye, ZoomIn, ZoomOut, Paintbrush, Globe, Scaling, Info, Shirt, Camera, GalleryThumbnails, Scissors, Pilcrow, Hourglass, Film, Shapes } from 'lucide-react';
 
 interface ControlPanelProps {
+  mediaType: 'image' | 'video' | null;
   imageFile: ImageFile | null;
+  videoFile: VideoFile | null;
+  videoInfo: VideoInfo | null;
   onAutoAdjust: () => void;
   onRestore: () => void;
   onColorize: () => void;
@@ -18,9 +20,11 @@ interface ControlPanelProps {
   onGenerateBwStyles: () => void;
   on3dDrawing: () => void;
   onDollify: () => void;
-  onGenerateImages: (prompt: string) => void;
+  onGenerateFavicons: () => void;
+  onVectorize: () => void;
   onWebSearch: () => void;
   onGifToMp4: () => void;
+  onCompactVideo: (quality: 'high' | 'medium' | 'low') => void;
   isApiKeySelected: boolean;
   setIsApiKeySelected: (isSelected: boolean) => void;
   onGenerateArtStyles: () => void;
@@ -28,6 +32,7 @@ interface ControlPanelProps {
   onHoldMyDoll: () => void;
   onPhotoShoot: () => void;
   onHairstyleTrial: () => void;
+  onAgeChange: () => void;
   onVirtualTryOn: (clothingDescription: string) => void;
   onCrop: () => void;
   onCropConfirm: () => void;
@@ -43,12 +48,15 @@ interface ControlPanelProps {
   setColorChangePrompt: (prompt: string) => void;
   onClearMask: () => void;
   onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  onVideoDownload: () => void;
   onUndo: () => void;
   onUploadNew: (event: React.ChangeEvent<HTMLInputElement>) => void;
   isUndoDisabled: boolean;
   activeTool: Tool | null;
-  isImageLoaded: boolean;
+  isMediaLoaded: boolean;
   isEditingMode: boolean;
+  isProcessedVideoReady: boolean;
+  isLoading: boolean;
   brightness: number;
   setBrightness: (value: number) => void;
   contrast: number;
@@ -76,6 +84,15 @@ const ControlButton: React.FC<{ icon: React.ReactNode, text: string, onClick: ()
     </button>
 );
 
+const formatBytes = (bytes: number | null, decimals = 2) => {
+    if (bytes === null || bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
 const ImageInfoCollapse: React.FC<{
     fileName: string | null;
     fileType: string | null;
@@ -83,15 +100,6 @@ const ImageInfoCollapse: React.FC<{
     dimensions: { width: number; height: number } | null;
 }> = ({ fileName, fileType, fileSize, dimensions }) => {
     const [isOpen, setIsOpen] = useState(true);
-
-    const formatBytes = (bytes: number | null, decimals = 2) => {
-        if (bytes === null || bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    };
 
     return (
         <div className="bg-gray-800 rounded-lg">
@@ -122,6 +130,55 @@ const ImageInfoCollapse: React.FC<{
         </div>
     );
 };
+
+const VideoInfoCollapse: React.FC<{
+    file: VideoFile | null;
+    info: VideoInfo | null;
+}> = ({ file, info }) => {
+    const [isOpen, setIsOpen] = useState(true);
+
+    const formatDuration = (seconds: number | undefined) => {
+        if (seconds === undefined) return 'N/A';
+        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    };
+
+    return (
+        <div className="bg-gray-800 rounded-lg">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3 rounded-lg text-left font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">
+                <span className="flex items-center"><Info size={18} className="mr-2"/> Video Information</span>
+                <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && file && (
+                <div className="p-4 space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                        <span className="text-gray-400 flex-shrink-0 mr-2">Filename:</span>
+                        <span className="font-mono text-gray-200 truncate text-right" title={file.name}>{file.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-400">Resolution:</span>
+                        <span className="font-mono text-gray-200">{info ? `${info.width} x ${info.height}` : 'Loading...'}</span>
+                    </div>
+                     <div className="flex justify-between">
+                        <span className="text-gray-400">Duration:</span>
+                        <span className="font-mono text-gray-200">{formatDuration(info?.duration)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-400">Type:</span>
+                        <span className="font-mono text-gray-200">{file.type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span className="text-gray-400">Size:</span>
+                        <span className="font-mono text-gray-200">{formatBytes(file.size)}</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const AdjustmentControls: React.FC<Pick<ControlPanelProps, 'brightness' | 'setBrightness' | 'contrast' | 'setContrast' | 'angle' | 'setAngle' | 'gamma' | 'setGamma' | 'sharpness' | 'setSharpness' | 'onResetAdjustments'>> = 
 ({ brightness, setBrightness, contrast, setContrast, angle, setAngle, gamma, setGamma, sharpness, setSharpness, onResetAdjustments }) => {
@@ -168,17 +225,17 @@ const AdjustmentControls: React.FC<Pick<ControlPanelProps, 'brightness' | 'setBr
 
 const ViewControls: React.FC<{
     activeTool: Tool | null;
-    isImageLoaded: boolean;
+    isMediaLoaded: boolean;
     onCrop: () => void;
     onCropConfirm: () => void;
     zoom: number;
     onZoomIn: () => void;
     onZoomOut: () => void;
     onResetZoom: () => void;
-}> = ({ activeTool, isImageLoaded, onCrop, onCropConfirm, zoom, onZoomIn, onZoomOut, onResetZoom }) => {
+}> = ({ activeTool, isMediaLoaded, onCrop, onCropConfirm, zoom, onZoomIn, onZoomOut, onResetZoom }) => {
     const [isOpen, setIsOpen] = useState(true);
-    const nonZoomableTools: (Tool | null)[] = ['gif-to-mp4', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search', 'black-and-white', 'art-effects', 'photo-shoot', 'art-movements', 'hairstyle-trial', 'virtual-try-on'];
-    const isZoomable = isImageLoaded && !nonZoomableTools.includes(activeTool);
+    const nonZoomableTools: (Tool | null)[] = ['gif-to-mp4', 'cartoonify', '3d-drawing', 'dollify', 'generate', 'web-search', 'black-and-white', 'art-effects', 'photo-shoot', 'art-movements', 'hairstyle-trial', 'virtual-try-on', 'change-age', 'favicon', 'vectorize'];
+    const isZoomable = isMediaLoaded && !nonZoomableTools.includes(activeTool);
 
     return (
         <div className="bg-gray-800 rounded-lg">
@@ -311,15 +368,15 @@ const AIFunctionsCollapse: React.FC<{
     onHoldMyDoll: () => void;
     onPhotoShoot: () => void;
     onHairstyleTrial: () => void;
+    onAgeChange: () => void;
+    onGenerateFavicons: () => void;
+    onVectorize: () => void;
     onWebSearch: () => void;
     onGifToMp4: () => void;
     imageFile: ImageFile | null;
-    onGenerateImages: (prompt: string) => void;
-    generationPrompt: string;
-    setGenerationPrompt: (value: string) => void;
     isApiKeySelected: boolean;
     setIsApiKeySelected: (isSelected: boolean) => void;
-    isImageLoaded: boolean;
+    isMediaLoaded: boolean;
   }> = (props) => {
       const [isOpen, setIsOpen] = useState(true);
   
@@ -343,6 +400,9 @@ const AIFunctionsCollapse: React.FC<{
                       <ControlButton icon={<SmilePlus size={20} />} text="Hold My Doll" onClick={props.onHoldMyDoll} description="Creates a doll of you and puts it in your hands." />
                       <ControlButton icon={<Camera size={20} />} text="AI Photo Shoot" onClick={props.onPhotoShoot} description="Generate 4 new poses in 4 new scenes." />
                       <ControlButton icon={<Scissors size={20} />} text="Hairstyle Trial" onClick={props.onHairstyleTrial} description="Try on 4 different hairstyles." />
+                      <ControlButton icon={<Hourglass size={20} />} text="Change Age" onClick={props.onAgeChange} description="See yourself as a baby and as elderly." />
+                      <ControlButton icon={<Globe size={20} />} text="Generate Favicon" onClick={props.onGenerateFavicons} description="Create icon set for your website." />
+                      <ControlButton icon={<Shapes size={20} />} text="Convert to Vector (SVG)" onClick={props.onVectorize} description="Create a scalable vector graphic." />
                       <ControlButton icon={<Globe size={20} />} text="Web Image Search" onClick={props.onWebSearch} />
                       
                       <div className="bg-gray-900 p-4 rounded-lg space-y-3">
@@ -355,7 +415,7 @@ const AIFunctionsCollapse: React.FC<{
                           />
                           <button
                               onClick={props.onContextualText}
-                              disabled={!props.contextualTextPrompt.trim() || !props.isImageLoaded}
+                              disabled={!props.contextualTextPrompt.trim() || !props.isMediaLoaded}
                               className="w-full py-2 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                               <Pilcrow size={20} className="mr-2" /> Add Text to Image
@@ -385,7 +445,7 @@ const AIFunctionsCollapse: React.FC<{
                           ) : (
                               <button
                                   onClick={props.onGifToMp4}
-                                  disabled={!props.isImageLoaded}
+                                  disabled={!props.isMediaLoaded}
                                   className="w-full py-2 bg-purple-600 text-white font-semibold rounded-lg hover:bg-purple-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                   <FileVideo size={20} className="mr-2" /> Convert to MP4
@@ -393,41 +453,6 @@ const AIFunctionsCollapse: React.FC<{
                           )}
                         </div>
                       )}
-  
-                       <div className="bg-gray-900 p-4 rounded-lg space-y-3">
-                          <h3 className="font-semibold text-white flex items-center"><Sparkles size={18} className="mr-2" />Generate from Text</h3>
-                          <textarea
-                              value={props.generationPrompt}
-                              onChange={(e) => props.setGenerationPrompt(e.target.value)}
-                              placeholder="e.g., a cute cat astronaut on the moon, cinematic lighting..."
-                              className="w-full h-24 p-2 bg-gray-700 text-gray-200 rounded-md focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                          />
-                          {!props.isApiKeySelected ? (
-                              <div className="text-center p-2 bg-yellow-900/50 rounded-lg">
-                                  <p className="text-sm text-yellow-300 mb-2">Image generation requires an API key.</p>
-                                  <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mb-2 block">Learn about billing</a>
-                                  <button 
-                                      onClick={async () => {
-                                        if (window.aistudio && window.aistudio.openSelectKey) {
-                                          await window.aistudio.openSelectKey();
-                                          props.setIsApiKeySelected(true);
-                                        }
-                                      }}
-                                      className="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
-                                  >
-                                      <KeyRound size={20} className="mr-2" /> Select API Key
-                                  </button>
-                              </div>
-                          ) : (
-                              <button
-                                  onClick={() => props.onGenerateImages(props.generationPrompt)}
-                                  disabled={!props.generationPrompt.trim()}
-                                  className="w-full py-2 bg-teal-600 text-white font-semibold rounded-lg hover:bg-teal-700 transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                  <Sparkles size={20} className="mr-2" /> Generate 4 Images
-                              </button>
-                          )}
-                      </div>
                   </div>
               )}
           </div>
@@ -501,12 +526,74 @@ const VirtualTryOnCollapse: React.FC<{
     );
 };
 
-export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
-    const [showDownloadOptions, setShowDownloadOptions] = useState(false);
-    const [generationPrompt, setGenerationPrompt] = useState('');
+const VideoToolsCollapse: React.FC<{
+    onCompactVideo: (quality: 'high' | 'medium' | 'low') => void;
+    isApiKeySelected: boolean;
+    setIsApiKeySelected: (isSelected: boolean) => void;
+}> = ({ onCompactVideo, isApiKeySelected, setIsApiKeySelected }) => {
+    const [isOpen, setIsOpen] = useState(true);
+
+    const qualityOptions: {key: 'high' | 'medium' | 'low'; label: string; description: string}[] = [
+        { key: 'high', label: 'High Quality', description: 'Best balance of quality and size.' },
+        { key: 'medium', label: 'Good Quality', description: 'Smaller file, minimal quality loss.' },
+        { key: 'low', label: 'Smallest File', description: 'Maximum compression.' },
+    ];
+
+    const content = (
+        <div className="p-4 space-y-3">
+            <p className="text-sm text-gray-400 text-center">Reduce file size and convert to a web-friendly MP4 format.</p>
+            {qualityOptions.map(({ key, label, description }) => (
+                <button
+                    key={key}
+                    onClick={() => onCompactVideo(key)}
+                    className="w-full text-left p-3 rounded-lg bg-gray-700 hover:bg-blue-600 transition-colors group"
+                >
+                    <div className="font-medium text-gray-200">{label}</div>
+                    <div className="text-xs text-gray-400 group-hover:text-gray-200">{description}</div>
+                </button>
+            ))}
+        </div>
+    );
+
+    const apiKeyPrompt = (
+         <div className="p-4 space-y-3">
+             <div className="text-center p-2 bg-yellow-900/50 rounded-lg">
+                <p className="text-sm text-yellow-300 mb-2">Video processing requires an API key.</p>
+                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline mb-2 block">Learn about billing</a>
+                <button 
+                    onClick={async () => {
+                        if (window.aistudio && window.aistudio.openSelectKey) {
+                          await window.aistudio.openSelectKey();
+                          setIsApiKeySelected(true);
+                        }
+                    }}
+                    className="w-full py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center"
+                >
+                    <KeyRound size={20} className="mr-2" /> Select API Key
+                </button>
+            </div>
+        </div>
+    );
 
     return (
-        <div className="lg:col-span-3 bg-gray-900 rounded-xl p-4 flex flex-col space-y-4 overflow-y-auto">
+        <div className="bg-gray-800 rounded-lg">
+            <button onClick={() => setIsOpen(!isOpen)} className="w-full flex items-center justify-between p-3 rounded-lg text-left font-medium bg-gray-700 text-gray-200 hover:bg-gray-600">
+                <span className="flex items-center"><Film size={18} className="mr-2"/> Compact & Convert Video</span>
+                <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (isApiKeySelected ? content : apiKeyPrompt)}
+        </div>
+    );
+}
+
+export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
+    const [showDownloadOptions, setShowDownloadOptions] = useState(false);
+
+    const isImageMode = props.mediaType === 'image';
+    const isVideoMode = props.mediaType === 'video';
+
+    return (
+        <div className="bg-gray-900 rounded-xl p-4 flex flex-col space-y-4">
             <h2 className="text-xl font-bold text-center border-b border-gray-700 pb-2">Tools</h2>
             
             <div>
@@ -514,7 +601,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     type="file"
                     id="new-file-upload"
                     className="hidden"
-                    accept="image/jpeg, image/png, image/webp, image/gif"
+                    accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                     onChange={props.onUploadNew}
                 />
                 <label
@@ -522,11 +609,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     className="w-full flex items-center justify-center space-x-2 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors cursor-pointer"
                 >
                     <Upload size={20} />
-                    <span>Upload New Image</span>
+                    <span>Upload New File</span>
                 </label>
             </div>
             
-            {props.isEditingMode && (
+            {isImageMode && (
               <>
                 <ImageInfoCollapse
                     fileName={props.imageFile?.name || null}
@@ -535,7 +622,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     dimensions={props.currentDimensions}
                 />
 
-                <h2 className="text-xl font-bold text-center border-b border-gray-700 pb-2">Editing Tools</h2>
+                <h2 className="text-xl font-bold text-center border-b border-gray-700 pb-2">Image Editing Tools</h2>
                 
                 <ControlButton icon={<Sparkles size={20} />} text="Auto-Adjust" onClick={props.onAutoAdjust} />
 
@@ -555,15 +642,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                     onHoldMyDoll={props.onHoldMyDoll}
                     onPhotoShoot={props.onPhotoShoot}
                     onHairstyleTrial={props.onHairstyleTrial}
+                    onAgeChange={props.onAgeChange}
+                    onGenerateFavicons={props.onGenerateFavicons}
+                    onVectorize={props.onVectorize}
                     onWebSearch={props.onWebSearch}
                     onGifToMp4={props.onGifToMp4}
                     imageFile={props.imageFile}
-                    onGenerateImages={props.onGenerateImages}
-                    generationPrompt={generationPrompt}
-                    setGenerationPrompt={setGenerationPrompt}
                     isApiKeySelected={props.isApiKeySelected}
                     setIsApiKeySelected={props.setIsApiKeySelected}
-                    isImageLoaded={props.isImageLoaded}
+                    isMediaLoaded={props.isMediaLoaded}
                 />
 
                 <VirtualTryOnCollapse onVirtualTryOn={props.onVirtualTryOn} />
@@ -575,7 +662,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
 
                 <ViewControls
                     activeTool={props.activeTool}
-                    isImageLoaded={props.isImageLoaded}
+                    isMediaLoaded={props.isMediaLoaded}
                     onCrop={props.onCrop}
                     onCropConfirm={props.onCropConfirm}
                     zoom={props.zoom}
@@ -662,28 +749,54 @@ export const ControlPanel: React.FC<ControlPanelProps> = (props) => {
                 </div>
               </>
             )}
-            
+
+            {isVideoMode && (
+                <>
+                    <VideoInfoCollapse file={props.videoFile} info={props.videoInfo} />
+                    <h2 className="text-xl font-bold text-center border-b border-gray-700 pb-2">Video Editing Tools</h2>
+                    <VideoToolsCollapse
+                        onCompactVideo={props.onCompactVideo}
+                        isApiKeySelected={props.isApiKeySelected}
+                        setIsApiKeySelected={props.setIsApiKeySelected}
+                    />
+                </>
+            )}
+
             <div className="pt-4 mt-auto space-y-2">
-                <button onClick={props.onUndo} disabled={props.isUndoDisabled} className="w-full flex items-center justify-center space-x-2 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                    <Undo size={20} />
-                    <span>Undo</span>
-                </button>
-                <div className="relative">
-                    <button 
-                      onClick={() => setShowDownloadOptions(!showDownloadOptions)} 
-                      disabled={!props.isImageLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify' || props.activeTool === 'black-and-white' || props.activeTool === 'art-effects' || props.activeTool === 'photo-shoot' || props.activeTool === 'art-movements' || props.activeTool === 'hairstyle-trial' || props.activeTool === 'virtual-try-on'}
-                      className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Download size={20} />
-                        <span>Save Image</span>
+                {isImageMode && (
+                    <button onClick={props.onUndo} disabled={props.isUndoDisabled} className="w-full flex items-center justify-center space-x-2 py-2 bg-gray-600 text-white font-semibold rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <Undo size={20} />
+                        <span>Undo</span>
                     </button>
-                    {showDownloadOptions && (
-                        <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1">
-                            <button onClick={() => { props.onDownload('jpeg'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
-                            <button onClick={() => { props.onDownload('png'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
-                            <button onClick={() => { props.onDownload('webp'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
-                        </div>
-                    )}
-                </div>
+                )}
+                {isImageMode && (
+                    <div className="relative">
+                        <button 
+                          onClick={() => setShowDownloadOptions(!showDownloadOptions)} 
+                          disabled={!props.isMediaLoaded || props.activeTool === 'cartoonify' || props.activeTool === 'generate' || props.activeTool === '3d-drawing' || props.activeTool === 'dollify' || props.activeTool === 'black-and-white' || props.activeTool === 'art-effects' || props.activeTool === 'photo-shoot' || props.activeTool === 'art-movements' || props.activeTool === 'hairstyle-trial' || props.activeTool === 'virtual-try-on' || props.activeTool === 'change-age' || props.activeTool === 'favicon' || props.activeTool === 'vectorize'}
+                          className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Download size={20} />
+                            <span>Save Image</span>
+                        </button>
+                        {showDownloadOptions && (
+                            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1">
+                                <button onClick={() => { props.onDownload('jpeg'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+                                <button onClick={() => { props.onDownload('png'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+                                <button onClick={() => { props.onDownload('webp'); setShowDownloadOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+                            </div>
+                        )}
+                    </div>
+                )}
+                 {isVideoMode && (
+                    <button 
+                        onClick={props.onVideoDownload} 
+                        disabled={!props.isProcessedVideoReady}
+                        className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        <Download size={20} />
+                        <span>Save Video as MP4</span>
+                    </button>
+                )}
             </div>
         </div>
     );

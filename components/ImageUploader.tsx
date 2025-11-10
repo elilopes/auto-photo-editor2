@@ -1,24 +1,20 @@
-
-import React, { useState, useCallback } from 'react';
-import { fileToBase64 } from '../utils/imageUtils';
-import type { ImageFile } from '../types';
+import React, { useState } from 'react';
 import { UploadCloud } from 'lucide-react';
 
-interface ImageUploaderProps {
-  onImageUpload: (file: ImageFile) => void;
+interface FileUploaderProps {
+  onFileUpload: (file: File) => void;
 }
 
-export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) => {
+export const FileUploader: React.FC<FileUploaderProps> = ({ onFileUpload }) => {
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleFileChange = async (files: FileList | null) => {
+  const handleFileChange = (files: FileList | null) => {
     if (files && files[0]) {
       const file = files[0];
-      if (file.type.startsWith('image/')) {
-        const base64 = await fileToBase64(file);
-        onImageUpload({ name: file.name, type: file.type, base64, size: file.size });
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        onFileUpload(file);
       } else {
-        alert('Please upload a valid image file (JPEG, PNG, WEBP, GIF).');
+        alert('Please upload a valid image (JPEG, PNG, WEBP, GIF) or video (MP4, WEBM, MOV) file.');
       }
     }
   };
@@ -57,17 +53,23 @@ export const ImageUploader: React.FC<ImageUploaderProps> = ({ onImageUpload }) =
                 type="file"
                 id="file-upload"
                 className="hidden"
-                accept="image/jpeg, image/png, image/webp, image/gif"
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime"
                 onChange={(e) => handleFileChange(e.target.files)}
             />
-            <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer space-y-4">
+            <label htmlFor="file-upload" className="flex flex-col items-center justify-center cursor-pointer space-y-4 text-center">
                 <UploadCloud className={`w-16 h-16 transition-colors duration-300 ${isDragging ? 'text-blue-400' : 'text-gray-500'}`} />
-                <p className="text-xl font-semibold text-gray-300">Drag & Drop your photo here</p>
+                <div>
+                    <p className="text-xl font-semibold text-gray-300">Drag & Drop your photo or video here for edition</p>
+                    <p className="text-sm text-gray-400 mt-2">Arraste e solte sua foto ou vídeo aqui para edição</p>
+                    <p className="text-sm text-gray-400">Glissez-déposez votre photo ou vidéo ici pour l'édition</p>
+                    <p className="text-sm text-gray-400">संपादन के लिए अपनी तस्वीर या वीडियो यहां खींचें और छोड़ें</p>
+                    <p className="text-sm text-gray-400">Перетащите фото или видео сюда для редактирования</p>
+                </div>
                 <p className="text-gray-400">or</p>
                 <button type="button" className="px-6 py-2 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-colors duration-300">
                     Browse Files
                 </button>
-                <p className="text-sm text-gray-500 pt-4">Supports JPEG, PNG, WEBP, GIF</p>
+                <p className="text-sm text-gray-500 pt-4">Supports JPEG, PNG, WEBP, GIF, MP4, WEBM, MOV</p>
             </label>
         </div>
     </div>

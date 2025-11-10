@@ -7,7 +7,7 @@ interface EditorLayoutProps {
 
 export const EditorLayout: React.FC<EditorLayoutProps> = ({ children }) => {
   return (
-    <main className="flex-grow grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden">
+    <main className="flex-grow flex flex-col gap-4 p-4">
       {children}
     </main>
   );

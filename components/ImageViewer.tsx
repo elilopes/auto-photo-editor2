@@ -1,12 +1,14 @@
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactCrop, { type Crop } from 'react-image-crop';
-import type { Tool } from '../types';
-import { Image, Download, Globe, Link, Loader2 } from 'lucide-react';
+import type { Tool, VideoFile, VideoInfo } from '../types';
+import { Image, Download, Globe, Link, Loader2, Film, Copy, Shapes, Check } from 'lucide-react';
 
 
-interface ImageViewerProps {
+interface MediaViewerProps {
   processedImage: string | null;
+  videoFile: VideoFile | null;
+  processedVideoUrl: string | null;
+  onVideoMetadataLoad: (info: VideoInfo) => void;
   generatedMp4Url: string | null;
   cartoonImages: string[] | null;
   generatedImages: string[] | null;
@@ -17,8 +19,11 @@ interface ImageViewerProps {
   photoShootImages: string[] | null;
   artMovementImages: string[] | null;
   hairstyleImages: string[] | null;
+  ageChangeImages: string[] | null;
   virtualTryOnImage: string | null;
   webSearchResults: { summary: string; links: { uri: string; title: string }[] } | null;
+  faviconImages: string[] | null;
+  vectorizedSvg: string | null;
   onDownloadCartoon: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadGeneratedImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadThreeDImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
@@ -28,7 +33,10 @@ interface ImageViewerProps {
   onDownloadPhotoShootImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadArtMovementImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadHairstyleImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadAgeChangeImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
   onDownloadVirtualTryOnImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadFaviconImage: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+  onDownloadSvg: (svgString: string) => void;
   activeTool: Tool | null;
   imgRef: React.RefObject<HTMLImageElement>;
   maskCanvasRef: React.RefObject<HTMLCanvasElement>;
@@ -48,7 +56,7 @@ const LoadingIndicator: React.FC<{ message: string }> = ({ message }) => (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black bg-opacity-75 backdrop-blur-sm rounded-xl">
         <Loader2 className="w-16 h-16 text-blue-400 animate-spin" />
         <h2 className="mt-6 text-2xl font-bold text-white">Please wait...</h2>
-        {message && <p className="mt-2 text-lg text-gray-300">{message}</p>}
+        {message && <p className="mt-2 text-lg text-gray-300 whitespace-pre-wrap text-center">{message}</p>}
     </div>
 );
 
@@ -405,6 +413,57 @@ const HairstyleViewer: React.FC<{
       );
 };
 
+const AgeChangeOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'jpeg' | 'png' | 'webp') => void;
+  }> = ({ image, title, onDownload }) => {
+    const [showOptions, setShowOptions] = useState(false);
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0">
+           <img src={image} alt={title} className="w-full h-full object-contain" />
+        </div>
+        <div className="relative w-full">
+          <button
+            onClick={() => setShowOptions(!showOptions)}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download size={20} />
+            <span>Save Image</span>
+          </button>
+          {showOptions && (
+            <div className="absolute bottom-full mb-2 w-full bg-gray-700 rounded-lg shadow-xl p-2 space-y-1 z-10">
+              <button onClick={() => { onDownload('jpeg'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as JPEG</button>
+              <button onClick={() => { onDownload('png'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as PNG</button>
+              <button onClick={() => { onDownload('webp'); setShowOptions(false); }} className="w-full text-left p-2 hover:bg-gray-600 rounded">as WEBP</button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+};
+
+const AgeChangeViewer: React.FC<{
+    images: string[];
+    onDownload: (base64: string, format: 'jpeg' | 'png' | 'webp') => void;
+}> = ({ images, onDownload }) => {
+    const titles = ["Baby", "Elderly"];
+    return (
+        <div className="w-full h-full grid grid-cols-2 gap-4 p-4">
+            {images.map((img, index) => (
+                <AgeChangeOption
+                    key={index}
+                    image={img}
+                    title={titles[index]}
+                    onDownload={(format) => onDownload(img, format)}
+                />
+            ))}
+        </div>
+    );
+};
+
 const ThreeDOption: React.FC<{
     image: string;
     title: string;
@@ -558,12 +617,112 @@ const WebSearchResultsViewer: React.FC<{
     );
 };
 
+const FaviconOption: React.FC<{
+    image: string;
+    title: string;
+    onDownload: (format: 'png') => void;
+  }> = ({ image, title, onDownload }) => {
+    return (
+      <div className="flex flex-col items-center space-y-2 p-2 bg-gray-800 rounded-lg h-full w-full">
+        <h3 className="text-md font-semibold">{title}</h3>
+        <div className="w-full flex-grow flex items-center justify-center overflow-hidden rounded-md min-h-0 bg-gray-900/50 p-2" style={{ imageRendering: 'pixelated' }}>
+           <img src={image} alt={title} className="w-auto h-auto object-contain max-w-full max-h-full" />
+        </div>
+        <button
+            onClick={() => onDownload('png')}
+            className="w-full flex items-center justify-center space-x-2 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
+        >
+            <Download size={20} />
+            <span>Save as PNG</span>
+        </button>
+      </div>
+    );
+};
 
-export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, generatedMp4Url, cartoonImages, generatedImages, threeDImages, dollImages, bwImages, artImages, photoShootImages, artMovementImages, hairstyleImages, virtualTryOnImage, webSearchResults, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, onDownloadBwImage, onDownloadArtImage, onDownloadPhotoShootImage, onDownloadArtMovementImage, onDownloadHairstyleImage, onDownloadVirtualTryOnImage, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom, isLoading, loadingMessage }) => {
+const FaviconViewer: React.FC<{
+      images: string[];
+      onDownload: (base64: string, format: 'png') => void;
+}> = ({ images, onDownload }) => {
+      const titles = ["16x16 Favicon", "32x32 Favicon", "48x48 Favicon", "192x192 Web App Icon"];
+      return (
+          <div className="w-full h-full grid grid-cols-2 grid-rows-2 gap-4 p-4">
+              {images.map((img, index) => (
+                  <FaviconOption
+                      key={index}
+                      image={img}
+                      title={titles[index]}
+                      onDownload={(format) => onDownload(img, format)}
+                  />
+              ))}
+          </div>
+      );
+};
+
+const VectorizedViewer: React.FC<{
+    svgCode: string;
+    onDownload: (svgCode: string) => void;
+}> = ({ svgCode, onDownload }) => {
+    const [copied, setCopied] = useState(false);
+    const svgDataUrl = `data:image/svg+xml;base64,${btoa(svgCode)}`;
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(svgCode).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    return (
+        <div className="w-full h-full flex flex-col lg:flex-row gap-4 p-4 bg-gray-900 rounded-lg">
+            {/* Left Panel: Rendered SVG */}
+            <div className="lg:w-1/2 flex flex-col space-y-4">
+                <h2 className="text-xl font-bold text-center text-white">Vector Preview</h2>
+                <div className="w-full flex-grow bg-white rounded-md flex items-center justify-center overflow-hidden p-4">
+                    <img src={svgDataUrl} alt="Vectorized preview" className="max-w-full max-h-full object-contain" />
+                </div>
+            </div>
+
+            {/* Right Panel: SVG Code & Actions */}
+            <div className="lg:w-1/2 flex flex-col">
+                <h2 className="text-xl font-bold text-center text-white mb-4 flex items-center justify-center">
+                    <Shapes size={24} className="mr-2" /> SVG Code
+                </h2>
+                <div className="flex-grow flex flex-col bg-gray-800 rounded-md p-2">
+                    <textarea
+                        readOnly
+                        value={svgCode}
+                        className="w-full flex-grow bg-gray-900 text-gray-300 font-mono text-xs p-2 rounded-md resize-none focus:outline-none"
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                         <button onClick={handleCopy} className="flex-1 py-2 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center">
+                            {copied ? <Check size={20} className="mr-2" /> : <Copy size={20} className="mr-2" />}
+                            {copied ? 'Copied!' : 'Copy Code'}
+                        </button>
+                        <button onClick={() => onDownload(svgCode)} className="flex-1 py-2 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center">
+                            <Download size={20} className="mr-2" />
+                            Download .svg
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export const MediaViewer: React.FC<MediaViewerProps> = ({ processedImage, videoFile, processedVideoUrl, onVideoMetadataLoad, generatedMp4Url, cartoonImages, generatedImages, threeDImages, dollImages, bwImages, artImages, photoShootImages, artMovementImages, hairstyleImages, ageChangeImages, virtualTryOnImage, webSearchResults, faviconImages, vectorizedSvg, onDownloadCartoon, onDownloadGeneratedImage, onDownloadThreeDImage, onDownloadDollImage, onDownloadBwImage, onDownloadArtImage, onDownloadPhotoShootImage, onDownloadArtMovementImage, onDownloadHairstyleImage, onDownloadAgeChangeImage, onDownloadVirtualTryOnImage, onDownloadFaviconImage, onDownloadSvg, activeTool, imgRef, maskCanvasRef, crop, setCrop, brightness, contrast, angle, gamma, sharpness, zoom, isLoading, loadingMessage }) => {
     const [isDrawing, setIsDrawing] = useState(false);
     const drawingWrapperRef = useRef<HTMLDivElement>(null);
     const viewerContainerRef = useRef<HTMLDivElement>(null);
     const isMaskingToolActive = activeTool === 'remove' || activeTool === 'background-blur' || activeTool === 'change-color';
+
+    const handleVideoLoad = (event: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+        const video = event.currentTarget;
+        onVideoMetadataLoad({
+            width: video.videoWidth,
+            height: video.videoHeight,
+            duration: video.duration,
+        });
+    };
 
     useEffect(() => {
         const canvas = maskCanvasRef.current;
@@ -596,7 +755,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
           return null;
         }
       
-        // 1. Get dimensions
         const naturalWidth = imageEl.naturalWidth;
         const naturalHeight = imageEl.naturalHeight;
       
@@ -604,27 +762,23 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
         const boxWidth = boxRect.width;
         const boxHeight = boxRect.height;
       
-        // 2. Calculate the rendered image's dimensions and position inside its box due to `object-contain`
         const naturalAspectRatio = naturalWidth / naturalHeight;
         const boxAspectRatio = boxWidth / boxHeight;
       
         let renderedWidth, renderedHeight, renderedX, renderedY;
       
         if (naturalAspectRatio > boxAspectRatio) {
-          // Image is wider than the box, letterboxed vertically
           renderedWidth = boxWidth;
           renderedHeight = boxWidth / naturalAspectRatio;
           renderedX = boxRect.left;
           renderedY = boxRect.top + (boxHeight - renderedHeight) / 2;
         } else {
-          // Image is taller, letterboxed horizontally
           renderedHeight = boxHeight;
           renderedWidth = boxHeight * naturalAspectRatio;
           renderedX = boxRect.left + (boxWidth - renderedWidth) / 2;
           renderedY = boxRect.top;
         }
       
-        // 3. Get cursor position from the event
         let cursorX, cursorY;
         if ('touches' in e.nativeEvent) {
           cursorX = (e.nativeEvent as TouchEvent).touches[0].clientX;
@@ -634,7 +788,6 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
           cursorY = (e.nativeEvent as MouseEvent).clientY;
         }
       
-        // 4. Check if cursor is within the rendered image bounds
         if (
           cursorX < renderedX ||
           cursorX > renderedX + renderedWidth ||
@@ -644,11 +797,9 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
           return null;
         }
       
-        // 5. Calculate cursor position relative to the rendered image (0 to 1)
         const relativeX = (cursorX - renderedX) / renderedWidth;
         const relativeY = (cursorY - renderedY) / renderedHeight;
       
-        // 6. Scale relative position to the natural image dimensions for canvas coordinates
         const canvasX = relativeX * naturalWidth;
         const canvasY = relativeY * naturalHeight;
       
@@ -718,140 +869,118 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({ processedImage, genera
         setIsDrawing(false);
       };
 
-    const sharpnessValue = sharpness / 250; // Scale for kernel
+    const sharpnessValue = sharpness / 250;
     const sharpnessFilter = sharpness > 0 ? 'url(#sharpness-filter)' : '';
 
-    const imageStyles: React.CSSProperties = {
+    const mediaStyles: React.CSSProperties = {
         filter: `brightness(${brightness}%) contrast(${contrast}%) ${sharpnessFilter}`.trim(),
         transform: `rotate(${angle}deg)`,
         transition: 'transform 0.2s ease-in-out',
         maxWidth: '100%',
         maxHeight: '100%',
+        objectFit: 'contain'
     };
 
     const scaledWrapperStyle: React.CSSProperties = {
         transform: `scale(${zoom})`,
         transformOrigin: 'center',
         transition: 'transform 0.1s ease-out',
-        // The following properties are important for ReactCrop to work correctly when zoomed.
         display: 'inline-block',
         lineHeight: 0
     };
 
     const renderContent = () => {
+        // Video content takes precedence
+        if (processedVideoUrl) {
+            return <video key="processed-video" src={processedVideoUrl} controls autoPlay loop style={mediaStyles} />;
+        }
+        if (videoFile) {
+            return <video key="source-video" src={videoFile.url} controls autoPlay loop style={{...mediaStyles, filter: 'none', transform: 'none'}} onLoadedMetadata={handleVideoLoad}/>;
+        }
+        
+        // Image-based content
+        if (activeTool === 'favicon' && faviconImages?.length) {
+            return <FaviconViewer images={faviconImages} onDownload={onDownloadFaviconImage as (base64: string, format: 'png') => void} />;
+        }
+        if (activeTool === 'vectorize' && vectorizedSvg) {
+            return <VectorizedViewer svgCode={vectorizedSvg} onDownload={onDownloadSvg} />;
+        }
         if (activeTool === 'web-search' && webSearchResults && processedImage) {
             return <WebSearchResultsViewer sourceImage={processedImage} results={webSearchResults} />;
         }
-
         if (generatedImages?.length) {
             return <GeneratedImageViewer images={generatedImages} onDownload={onDownloadGeneratedImage} />;
         }
-
         if (generatedMp4Url) {
-            return (
-                 <video src={generatedMp4Url} controls autoPlay loop style={imageStyles}>
-                    Your browser does not support the video tag.
-                 </video>
-            );
+            return <video src={generatedMp4Url} controls autoPlay loop style={mediaStyles} />;
         }
-        
         if (activeTool === 'virtual-try-on' && virtualTryOnImage) {
             return (
                 <div className="w-full h-full flex items-center justify-center p-4">
-                    <GeneratedImageOption
-                        image={virtualTryOnImage}
-                        onDownload={(format) => onDownloadVirtualTryOnImage(virtualTryOnImage, format)}
-                    />
+                    <GeneratedImageOption image={virtualTryOnImage} onDownload={(format) => onDownloadVirtualTryOnImage(virtualTryOnImage, format)} />
                 </div>
             );
         }
-
         if (activeTool === 'cartoonify' && cartoonImages?.length) {
             return <CartoonViewer images={cartoonImages} onDownload={onDownloadCartoon} />;
         }
-        
         if (activeTool === 'art-effects' && artImages?.length) {
             return <ArtViewer images={artImages} onDownload={onDownloadArtImage} />;
         }
-
         if (activeTool === 'photo-shoot' && photoShootImages?.length) {
             return <PhotoShootViewer images={photoShootImages} onDownload={onDownloadPhotoShootImage} />;
         }
-
         if (activeTool === 'art-movements' && artMovementImages?.length) {
             return <ArtMovementViewer images={artMovementImages} onDownload={onDownloadArtMovementImage} />;
         }
-
         if (activeTool === 'hairstyle-trial' && hairstyleImages?.length) {
             return <HairstyleViewer images={hairstyleImages} onDownload={onDownloadHairstyleImage} />;
         }
-
+        if (activeTool === 'change-age' && ageChangeImages?.length) {
+            return <AgeChangeViewer images={ageChangeImages} onDownload={onDownloadAgeChangeImage} />;
+        }
         if (activeTool === 'black-and-white' && bwImages?.length) {
             return <BwViewer images={bwImages} onDownload={onDownloadBwImage} />;
         }
-
         if (activeTool === '3d-drawing' && threeDImages?.length) {
             return <ThreeDViewer images={threeDImages} onDownload={onDownloadThreeDImage} />;
         }
-
         if (activeTool === 'dollify' && dollImages?.length) {
             return <DollViewer images={dollImages} onDownload={onDownloadDollImage} />;
         }
-
-        if (!processedImage) {
-            return (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-gray-500">
-                    <Image size={64}/>
-                    <p className="mt-4 text-lg">Your image will appear here</p>
-                </div>
-            )
-        }
-        
-        if (activeTool === 'crop') {
-            return (
-                <ReactCrop crop={crop} onChange={c => setCrop(c)}>
-                    <img ref={imgRef} src={processedImage} alt="To crop" className="object-contain" style={imageStyles} />
-                </ReactCrop>
-            );
+        if (processedImage) {
+            if (activeTool === 'crop') {
+                return <ReactCrop crop={crop} onChange={c => setCrop(c)}><img ref={imgRef} src={processedImage} alt="To crop" className="object-contain" style={mediaStyles} /></ReactCrop>;
+            }
+            if (isMaskingToolActive) {
+                return (
+                    <div ref={drawingWrapperRef} className="relative" style={{ display: 'inline-block', cursor: 'crosshair', lineHeight: 0, ...mediaStyles }} onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseLeave={stopDrawing} onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}>
+                      <img ref={imgRef} src={processedImage} alt="To edit" className="max-w-full max-h-full object-contain" style={{ pointerEvents: 'none' }}/>
+                      <canvas ref={maskCanvasRef} className="absolute top-0 left-0 w-full h-full" style={{ opacity: 0.5, pointerEvents: 'none' }} />
+                    </div>
+                );
+            }
+            return <img ref={imgRef} src={processedImage} alt="Processed" className="object-contain" style={mediaStyles} />;
         }
 
-        if (isMaskingToolActive) {
-            return (
-                <div
-                  ref={drawingWrapperRef}
-                  className="relative"
-                  style={{ display: 'inline-block', cursor: 'crosshair', lineHeight: 0, ...imageStyles }}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={stopDrawing}
-                  onMouseLeave={stopDrawing}
-                  onTouchStart={startDrawing}
-                  onTouchMove={draw}
-                  onTouchEnd={stopDrawing}
-                >
-                  <img ref={imgRef} src={processedImage} alt="To edit" className="max-w-full max-h-full object-contain" style={{ pointerEvents: 'none' }}/>
-                  <canvas
-                    ref={maskCanvasRef}
-                    className="absolute top-0 left-0 w-full h-full"
-                    style={{ opacity: 0.5, pointerEvents: 'none' }}
-                  />
-                </div>
-            );
-        }
-
-        return <img ref={imgRef} src={processedImage} alt="Processed" className="object-contain" style={imageStyles} />;
+        // Fallback for no media loaded
+        const icon = videoFile ? <Film size={64}/> : <Image size={64}/>;
+        const text = videoFile ? 'Your video will appear here' : 'Your image will appear here';
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-gray-500">
+                {icon}
+                <p className="mt-4 text-lg">{text}</p>
+            </div>
+        )
     };
 
     return (
-        <div className="relative lg:col-span-9 bg-black rounded-xl flex items-center justify-center p-4 overflow-hidden h-[85vh]">
+        <div className="relative bg-black rounded-xl flex items-center justify-center p-4 overflow-hidden h-[60vh] lg:h-[70vh]">
             {isLoading && <LoadingIndicator message={loadingMessage} />}
             <svg style={{ position: 'absolute', height: 0, width: 0 }}>
                 <defs>
                     <filter id="sharpness-filter">
-                    <feConvolveMatrix
-                        order="3"
-                        kernelMatrix={`0 ${-sharpnessValue} 0 ${-sharpnessValue} ${1 + 4 * sharpnessValue} ${-sharpnessValue} 0 ${-sharpnessValue} 0`}
-                    />
+                    <feConvolveMatrix order="3" kernelMatrix={`0 ${-sharpnessValue} 0 ${-sharpnessValue} ${1 + 4 * sharpnessValue} ${-sharpnessValue} 0 ${-sharpnessValue} 0`} />
                     </filter>
                 </defs>
             </svg>
